@@ -290,6 +290,8 @@ class SounderDaemon:
             cpi_seconds=self.coherent_seconds,
             sweep_rate_hz_per_s=first_tx.sweep_rate_hz_per_s if first_tx else -25733.913,
             sweep_repetition_hz=first_tx.sweep_repetition_hz if first_tx else 1.0,
+            center_freq_hz=first_tx.center_freq_hz if first_tx else 4_537_180.0,
+            preset=str(radiod_block.get("preset", "iq")),
             fallback_target_group_range_km=synth_p,
             force_synthetic=force_synthetic,
         )

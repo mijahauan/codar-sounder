@@ -145,12 +145,19 @@ class SyntheticIQSource:
 class RadiodIQSource:
     """Subscribe to a radiod IQ channel via ka9q-python.
 
-    Lazy-imports ``ka9q``-package modules at construction time so that
-    a host without ka9q-python installed can still load the rest of
+    On entry, calls ``RadiodControl.ensure_channel()`` to *provision*
+    the channel (radiod has runtime channel control via its multicast
+    control plane — no radiod restart needed).  Then attaches a
+    ``RadiodStream`` whose ``on_samples`` callback feeds a thread-safe
+    queue.  The iterator drains the queue into CPI-sized chunks and
+    yields them as ``complex64`` arrays.
+
+    Lazy-imports ``ka9q``-package modules at construction time so a
+    host without ka9q-python installed can still load the rest of
     codar-sounder (e.g. ``inventory --json``, ``validate --json``).
 
     Raises:
-        ModuleNotFoundError: if ka9q-python is not importable.  The
+        ModuleNotFoundError: if ka9q-python isn't importable.  The
             daemon catches this and falls back to ``SyntheticIQSource``
             with operator-visible warnings.
     """
@@ -159,71 +166,143 @@ class RadiodIQSource:
         self,
         *,
         radiod_status_dns: str,
-        channel_name: str,
+        channel_name: str,                  # informational only; ka9q computes SSRC from params
         sample_rate_hz: float,
         cpi_seconds: float,
+        center_freq_hz: float,
+        preset: str = "iq",
     ):
+        import queue as _q                   # stdlib
+
         self.radiod_status_dns = radiod_status_dns
         self.channel_name = channel_name
         self.sample_rate_hz = float(sample_rate_hz)
         self.cpi_seconds = float(cpi_seconds)
+        self.center_freq_hz = float(center_freq_hz)
+        self.preset = preset
+        self._control = None
         self._stream = None
+        self._channel_info = None
+        # Bounded queue: ka9q delivers ~30 ms batches at 64 kHz × s16.
+        # 64 entries ≈ 2 s of buffering — enough for jitter, not enough
+        # to occlude a real backlog.
+        self._sample_queue: "_q.Queue[np.ndarray]" = _q.Queue(maxsize=64)
         self._stopped = threading.Event()
-        self._import_ka9q()  # raises ModuleNotFoundError if missing
+        self._import_ka9q()                  # raises ModuleNotFoundError if missing
 
     @property
     def cpi_n_samples(self) -> int:
         return int(round(self.sample_rate_hz * self.cpi_seconds))
 
     def _import_ka9q(self) -> None:
-        # Lazy import — ka9q-python is large and may not be present.
-        # We deliberately import only what we need so import cost stays low.
         global _ka9q_RadiodStream, _ka9q_RadiodControl
         from ka9q.stream import RadiodStream                 # type: ignore[import-not-found]
         from ka9q.control import RadiodControl              # type: ignore[import-not-found]
         _ka9q_RadiodStream = RadiodStream
         _ka9q_RadiodControl = RadiodControl
 
+    def _on_samples(self, samples, quality) -> None:
+        """ka9q-python callback — runs on the stream's RX thread.
+
+        ka9q-python's resequencer occasionally produces garbage in
+        gap-fill regions: most often NaN, but also occasionally
+        finite-but-absurdly-large values (we've observed |x| ≈ 2×10³⁸,
+        right at float32 overflow).  Either kind of garbage propagates
+        through our coherent FFT — NaN poisons the entire range
+        profile; large values overflow during FFT accumulation
+        (numpy emits "overflow encountered in cast / invalid value
+        encountered in fft" warnings).
+
+        Sanitise here: replace non-finite with zero, then clip values
+        whose magnitude exceeds a sanity threshold.  Real radiod
+        s16-encoded IQ is normalised to roughly [-1, 1] in float32;
+        anything > 100 is unambiguously junk.  Zero-fill replaces
+        garbage with silence — the dechirper handles it gracefully.
+        """
+        if self._stopped.is_set():
+            return
+        arr = np.asarray(samples, dtype=np.complex64)
+        if not np.all(np.isfinite(arr)):
+            arr = np.where(np.isfinite(arr), arr, np.complex64(0))
+        # Magnitude-clip garbage (10x the largest plausible normalised IQ).
+        too_large = np.abs(arr) > 100.0
+        if np.any(too_large):
+            arr = np.where(too_large, np.complex64(0), arr)
+        try:
+            self._sample_queue.put_nowait(arr)
+        except Exception:
+            # Queue full → we're falling behind dechirping.  Drop oldest
+            # to keep recent samples; log once-per-CPI scale to avoid spam.
+            try:
+                self._sample_queue.get_nowait()
+                self._sample_queue.put_nowait(
+                    np.asarray(samples, dtype=np.complex64)
+                )
+                log.warning("RadiodIQSource: queue full, dropping oldest")
+            except Exception:
+                pass
+
     def __iter__(self) -> Iterator[np.ndarray]:
-        # The full RadiodStream wiring (control-channel resolution,
-        # SSRC negotiation, packet resequencing, gap-fill) is
-        # nontrivial and lives in ka9q-python.  v0.2 wires it up
-        # straightforwardly: subscribe, read CPI-sized chunks, yield
-        # them as complex64.  Detailed integration with ManagedStream
-        # for auto-recovery is deferred to v0.3.
         log.info(
-            "RadiodIQSource: subscribing to %s channel=%s sample_rate=%d Hz",
-            self.radiod_status_dns, self.channel_name, int(self.sample_rate_hz),
+            "RadiodIQSource: provisioning channel on %s freq=%d Hz "
+            "preset=%s sample_rate=%d Hz encoding=F32LE",
+            self.radiod_status_dns,
+            int(self.center_freq_hz),
+            self.preset,
+            int(self.sample_rate_hz),
         )
-        stream = _ka9q_RadiodStream(                        # type: ignore[name-defined]
-            status=self.radiod_status_dns,
-            ssrc=self.channel_name,
+        self._control = _ka9q_RadiodControl(self.radiod_status_dns)  # type: ignore[name-defined]
+        # Force F32LE (encoding=4) IQ.  ka9q-python's default (S16BE)
+        # appears to deliver byte-swap-corrupted samples from this
+        # ka9q-python / radiod combination — magnitudes come out as
+        # subnormal float32 garbage (~10⁻⁴¹) interspersed with values
+        # that overflow to ~10³⁸.  F32LE delivers the underlying IQ
+        # cleanly: every sample finite, magnitudes in the expected
+        # ~10⁻⁵ to ~10⁻⁴ range, no decoder pathology.
+        self._channel_info = self._control.ensure_channel(
+            frequency_hz=float(self.center_freq_hz),
+            preset=self.preset,
+            sample_rate=int(self.sample_rate_hz),
+            encoding=4,            # F32LE
         )
-        self._stream = stream
+        log.info(
+            "RadiodIQSource: channel ready: ssrc=%s mcast=%s:%d",
+            self._channel_info.ssrc,
+            self._channel_info.multicast_address,
+            self._channel_info.port,
+        )
+        self._stream = _ka9q_RadiodStream(                  # type: ignore[name-defined]
+            channel=self._channel_info,
+            on_samples=self._on_samples,
+        )
+        self._stream.start()
 
         n_samples = self.cpi_n_samples
         buf = np.empty(n_samples, dtype=np.complex64)
         filled = 0
-        for samples in stream:
-            chunk = np.asarray(samples, dtype=np.complex64)
-            while chunk.size > 0:
-                if self._stopped.is_set():
-                    return
-                take = min(chunk.size, n_samples - filled)
-                buf[filled:filled + take] = chunk[:take]
-                filled += take
-                chunk = chunk[take:]
-                if filled == n_samples:
-                    yield buf.copy()
-                    filled = 0
+        try:
+            while not self._stopped.is_set():
+                try:
+                    chunk = self._sample_queue.get(timeout=1.0)
+                except Exception:
+                    continue                 # timeout — just check stopped flag
+                idx = 0
+                while idx < chunk.size:
+                    take = min(chunk.size - idx, n_samples - filled)
+                    buf[filled:filled + take] = chunk[idx:idx + take]
+                    filled += take
+                    idx += take
+                    if filled == n_samples:
+                        yield buf.copy()
+                        filled = 0
+        finally:
+            try:
+                self._stream.stop()
+            except Exception as exc:
+                log.warning("RadiodStream stop failed: %s", exc)
 
     def stop(self) -> None:
         self._stopped.set()
-        if self._stream is not None:
-            try:
-                self._stream.close()
-            except Exception as exc:
-                log.warning("RadiodStream close failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +317,8 @@ def make_iq_source(
     cpi_seconds: float,
     sweep_rate_hz_per_s: float,
     sweep_repetition_hz: float,
+    center_freq_hz: float,
+    preset: str = "iq",
     fallback_target_group_range_km: float = 500.0,
     force_synthetic: bool = False,
 ):
@@ -254,6 +335,8 @@ def make_iq_source(
                 channel_name=channel_name,
                 sample_rate_hz=sample_rate_hz,
                 cpi_seconds=cpi_seconds,
+                center_freq_hz=center_freq_hz,
+                preset=preset,
             )
         except ModuleNotFoundError as exc:
             log.warning(
