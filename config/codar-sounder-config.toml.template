@@ -1,0 +1,69 @@
+# codar-sounder configuration.
+#
+# Edit before starting any codar-sounder@<radiod-id>.service instance.
+# See data/codar-stations.toml in the repo for known CODAR transmitter
+# frequencies, sweep parameters, and locations.
+
+[station]
+callsign     = "N0CALL"
+grid_square  = ""
+# Receiver coordinates (used for great-circle distance to each TX, which
+# in turn drives the secant-law equivalent vertical frequency).
+receiver_lat = 0.0
+receiver_lon = 0.0
+
+[paths]
+output_dir   = "/var/lib/codar-sounder"
+log_dir      = "/var/log/codar-sounder"
+
+# One [[radiod]] block per local radiod that codar-sounder uses.
+# Each daemon (one per systemd instance) picks the matching block via
+# --radiod-id.  The channel_name must match a wide IQ channel declared
+# in the corresponding [[radiod.fragment]].
+[[radiod]]
+id           = "bee1-rx888"
+status_dns   = "bee1-status.local"
+channel_name = "codar-4mhz"
+
+# One [[radiod.transmitter]] per CODAR transmitter audible from this
+# radiod's antenna at the channel_name's centre frequency.  Multiple
+# US-east-coast 4.537 MHz transmitters share the same band; list each
+# separately so the dechirper knows their per-station sweep parameters.
+[[radiod.transmitter]]
+id                  = "DUCK"
+center_freq_hz      = 4537180
+sweep_rate_hz_per_s = -25733913
+sweep_bw_hz         = 25733
+sweep_repetition_hz = 1
+tx_lat_deg          = 36.180350
+tx_lon_deg          = -75.750133
+
+# [[radiod.transmitter]]
+# id                  = "LISL"
+# center_freq_hz      = 4537180
+# sweep_rate_hz_per_s = -25733913
+# sweep_bw_hz         = 25733
+# sweep_repetition_hz = 1
+# tx_lat_deg          = 36.691717
+# tx_lon_deg          = -75.922633
+
+# A second radiod (e.g. a north-pointing antenna) gets its own block:
+#
+# [[radiod]]
+# id           = "bee3-rx888"
+# status_dns   = "bee3-status.local"
+# channel_name = "codar-4mhz"
+# [[radiod.transmitter]]
+# id           = "MVCO"
+# ...
+
+[processing]
+# Coherent processing interval — number of seconds of IQ to integrate
+# before publishing one record.  60 s gives ~5 cm/s velocity resolution
+# at 4.5 MHz (Kaeppler 2022 §2.1).
+coherent_seconds = 60
+# Range gate (km, group range) for F-region returns.
+range_min_km     = 200
+range_max_km     = 800
+# Minimum SNR (dB) for a peak to be reported.
+snr_threshold_db = 5.0

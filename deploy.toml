@@ -1,0 +1,94 @@
+[package]
+name             = "codar-sounder"
+version          = "0.1.0"
+contract_version = "0.5"
+license          = "MIT"
+
+# Identity + sigmond-side policy (Wave 2 [client] block).
+[client]
+name        = "codar-sounder"
+kind        = "client"
+description = "Opportunistic ionospheric sounder using CODAR chirp transmissions"
+repo        = "https://github.com/mijahauan/codar-sounder"
+requires    = ["ka9q-python", "ka9q-radio"]
+contract    = "0.5"
+
+# Lifecycle ordering. Starts after radiod (priority 0) but in parallel with
+# the decoder chain — codar-sounder doesn't feed any other client.
+[client.lifecycle]
+start_priority = 200
+
+# Generic extras passthrough — values from coordination.toml [[clients.X]]
+# that should appear in coordination.env.
+[client.coordination]
+passthrough_extras = [
+    "tx_lat_deg", "tx_lon_deg",
+    "sweep_rate_hz_per_s", "sweep_bw_hz", "sweep_repetition_hz",
+]
+
+# Configuration interview (CONTRACT v0.5 §14).  Sigmond invokes
+# codar-sounder's own argparse subcommands.  Both honor §14.3 env-var bag
+# (STATION_*, SIGMOND_INSTANCE, SIGMOND_RADIOD_STATUS) as defaults.
+[contract.config]
+init = ["/usr/local/bin/codar-sounder", "config", "init"]
+edit = ["/usr/local/bin/codar-sounder", "config", "edit"]
+
+[build]
+steps = [
+    "python3 -m venv /opt/codar-sounder/venv",
+    "/opt/codar-sounder/venv/bin/pip install --upgrade pip setuptools wheel",
+    "/opt/codar-sounder/venv/bin/pip install -e /opt/git/sigmond/codar-sounder",
+]
+produces = [
+    "/opt/codar-sounder/venv/bin/codar-sounder",
+]
+
+[[install.steps]]
+kind = "link"
+src  = "/opt/codar-sounder/venv/bin/codar-sounder"
+dst  = "/usr/local/bin/codar-sounder"
+
+[[install.steps]]
+kind = "link"
+src  = "systemd/codar-sounder@.service"
+dst  = "/etc/systemd/system/codar-sounder@.service"
+
+[[install.steps]]
+kind      = "render"
+src       = "config/codar-sounder-config.toml.template"
+dst       = "/etc/codar-sounder/codar-sounder-config.toml"
+if_absent = true
+
+[[install.steps]]
+kind  = "mkdir"
+dst   = "/var/lib/codar-sounder"
+owner = "codarsnd:codarsnd"
+mode  = "0755"
+
+[[install.steps]]
+kind  = "mkdir"
+dst   = "/var/log/codar-sounder"
+owner = "codarsnd:codarsnd"
+mode  = "0755"
+
+[systemd]
+templated_units = ["codar-sounder@.service"]
+
+# Wave 3 §15 channel contribution: declare the wide IQ channel(s) sigmond
+# should provision in radiod for codar-sounder.  Rendered into
+# /etc/radio/radiod@<id>.conf.d/40-codar-sounder.conf during smd apply.
+[[radiod.fragment]]
+priority = 40
+target   = "*"
+template = "etc/radiod-fragment.conf"
+
+[deps]
+[[deps.pypi]]
+name    = "ka9q-python"
+version = ">=3.8.0"
+venv    = "/opt/codar-sounder/venv"
+
+[[deps.pypi]]
+name    = "numpy"
+version = ">=1.24.0"
+venv    = "/opt/codar-sounder/venv"

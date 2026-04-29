@@ -1,0 +1,587 @@
+# Known CODAR transmitter sites — `codar-sounder config init` reads this
+# file to offer an operator picker keyed on (receiver_lat, receiver_lon)
+# great-circle distance, and to populate [[radiod.transmitter]] defaults.
+#
+# Source: HFRNet station table (CODAR_WERA.pdf, 2014 snapshot).  Only
+# CODAR (FMCW) stations are listed — WERA stations use a different
+# waveform that codar-sounder's dechirper does not handle.
+#
+# Per-station fields:
+#   freq_mhz              — radiated centre frequency (MHz)
+#   sweep_rate_hz_per_s   — chirp slope, signed (negative = down-chirp)
+#   sweep_bw_hz           — usable sweep bandwidth (Hz)
+#   sweep_repetition_hz   — sweep repetition frequency (Hz, "PRR" in CODAR docs)
+#   tx_lat_deg, tx_lon_deg — antenna location (WGS84)
+#   association            — operating institution (informational)
+
+# ---------------------------------------------------------------------------
+# US East Coast — 4.5 MHz band (long-range)
+# ---------------------------------------------------------------------------
+
+[stations.BLCK]
+freq_mhz            = 4.513
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 41.152733
+tx_lon_deg          = -71.551000
+association         = "Rutgers"
+
+[stations.BRIG]
+freq_mhz            = 4.513
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 39.407450
+tx_lon_deg          = -74.362117
+association         = "Rutgers"
+
+[stations.HOOK]
+freq_mhz            = 4.513
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 40.432800
+tx_lon_deg          = -73.983900
+association         = "Rutgers"
+
+[stations.LOVE]
+freq_mhz            = 4.513
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 39.736217
+tx_lon_deg          = -74.117050
+association         = "Rutgers"
+
+[stations.MRCH]
+freq_mhz            = 4.513
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 40.788200
+tx_lon_deg          = -72.745300
+association         = "Rutgers"
+
+[stations.MVCO]
+freq_mhz            = 4.513
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 41.349817
+tx_lon_deg          = -70.526833
+association         = "Rutgers"
+
+[stations.NANT]
+freq_mhz            = 4.513
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 41.249767
+tx_lon_deg          = -69.971883
+association         = "Rutgers"
+
+[stations.WILD]
+freq_mhz            = 4.513
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 38.942167
+tx_lon_deg          = -74.886133
+association         = "Rutgers"
+
+[stations.DUCK]
+freq_mhz            = 4.53718
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 36.180350
+tx_lon_deg          = -75.750133
+association         = "UNC"
+
+[stations.HATY]
+freq_mhz            = 4.53718
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 35.257217
+tx_lon_deg          = -75.519883
+association         = "UNC"
+
+[stations.HBSP]
+freq_mhz            = 4.54296
+sweep_rate_hz_per_s = -18381.367
+sweep_bw_hz         = 18381
+sweep_repetition_hz = 1
+tx_lat_deg          = 30.383033
+tx_lon_deg          = -86.432700
+association         = "USM"
+
+[stations.PILR]
+freq_mhz            = 4.550
+sweep_rate_hz_per_s = -25634.758
+sweep_bw_hz         = 25635
+sweep_repetition_hz = 1
+tx_lat_deg          = 37.496750
+tx_lon_deg          = -122.499367
+association         = "SFSU"
+
+[stations.ASSA]
+freq_mhz            = 4.575
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 38.205017
+tx_lon_deg          = -75.152900
+association         = "ODU"
+
+[stations.CEDR]
+freq_mhz            = 4.575
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 37.672917
+tx_lon_deg          = -75.592267
+association         = "ODU"
+
+[stations.LISL]
+freq_mhz            = 4.575
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 36.691717
+tx_lon_deg          = -75.922633
+association         = "ODU"
+
+[stations.OBSP]
+freq_mhz            = 4.660
+sweep_rate_hz_per_s = -18381.367
+sweep_bw_hz         = 18381
+sweep_repetition_hz = 1
+tx_lat_deg          = 30.249583
+tx_lon_deg          = -87.668267
+association         = "USM"
+
+[stations.NAPL]
+freq_mhz            = 4.900
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 26.162150
+tx_lon_deg          = -81.810533
+association         = "USF"
+
+[stations.RDSR]
+freq_mhz            = 4.900
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 27.832533
+tx_lon_deg          = -82.834383
+association         = "USF"
+
+[stations.VENI]
+freq_mhz            = 4.900
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 27.077583
+tx_lon_deg          = -82.451600
+association         = "USF"
+
+# ---------------------------------------------------------------------------
+# US East Coast — 13.45 MHz band (mid-range)
+# ---------------------------------------------------------------------------
+
+[stations.SEAB]
+freq_mhz            = 13.450
+sweep_rate_hz_per_s = -49629.688
+sweep_bw_hz         = 49630
+sweep_repetition_hz = 1
+tx_lat_deg          = 40.362633
+tx_lon_deg          = -73.972400
+association         = "Rutgers"
+
+[stations.SPRK]
+freq_mhz            = 13.450
+sweep_rate_hz_per_s = -49629.688
+sweep_bw_hz         = 49630
+sweep_repetition_hz = 1
+tx_lat_deg          = 39.935183
+tx_lon_deg          = -74.072017
+association         = "Rutgers"
+
+[stations.CDDO]
+freq_mhz            = 13.450
+sweep_rate_hz_per_s = -49629.688
+sweep_bw_hz         = 49630
+sweep_repetition_hz = 1
+tx_lat_deg          = 18.099767
+tx_lon_deg          = -67.190700
+association         = "UPR"
+
+[stations.FURA]
+freq_mhz            = 13.450
+sweep_rate_hz_per_s = -49629.688
+sweep_bw_hz         = 49630
+sweep_repetition_hz = 1
+tx_lat_deg          = 18.291667
+tx_lon_deg          = -67.198600
+association         = "UPR"
+
+# ---------------------------------------------------------------------------
+# US East Coast — 25 MHz band (short-range, ~1 km cells)
+# ---------------------------------------------------------------------------
+
+[stations.BISL]
+freq_mhz            = 25.360
+sweep_rate_hz_per_s = -69580.093
+sweep_bw_hz         = 139160
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 41.152583
+tx_lon_deg          = -71.551833
+association         = "URI"
+
+[stations.MISQ]
+freq_mhz            = 25.440
+sweep_rate_hz_per_s = -69580.078
+sweep_bw_hz         = 139160
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 41.322933
+tx_lon_deg          = -71.804217
+association         = "URI"
+
+[stations.GCAP]
+freq_mhz            = 25.300
+sweep_rate_hz_per_s = -150146.484
+sweep_bw_hz         = 300293
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 40.982550
+tx_lon_deg          = -73.623783
+association         = "UConn"
+
+[stations.STLI]
+freq_mhz            = 26.190
+sweep_rate_hz_per_s = -150146.484
+sweep_bw_hz         = 300293
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 40.908750
+tx_lon_deg          = -73.587283
+association         = "UConn"
+
+[stations.VIEW]
+freq_mhz            = 25.400
+sweep_rate_hz_per_s = -101097.519
+sweep_bw_hz         = 202195
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 36.949933
+tx_lon_deg          = -76.243183
+association         = "ODU"
+
+[stations.SUNS]
+freq_mhz            = 25.600
+sweep_rate_hz_per_s = -101097.519
+sweep_bw_hz         = 202195
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 37.137833
+tx_lon_deg          = -75.972200
+association         = "ODU"
+
+[stations.CPHN]
+freq_mhz            = 25.600
+sweep_rate_hz_per_s = -100708.031
+sweep_bw_hz         = 201416
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 36.930850
+tx_lon_deg          = -76.016750
+association         = "NIOT"
+
+# ---------------------------------------------------------------------------
+# US West Coast — 4.5 MHz band
+# ---------------------------------------------------------------------------
+
+[stations.RAGG]
+freq_mhz            = 4.54995
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 35.787367
+tx_lon_deg          = -121.336250
+association         = "SLO"
+
+[stations.BMLR]
+freq_mhz            = 4.78495
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 38.319483
+tx_lon_deg          = -123.073617
+association         = "BML"
+
+[stations.SHEL]
+freq_mhz            = 4.78495
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 40.033367
+tx_lon_deg          = -124.078867
+association         = "BML"
+
+[stations.MAN1]
+freq_mhz            = 4.785
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 45.640317
+tx_lon_deg          = -123.941800
+association         = "OSU"
+
+[stations.PSG1]
+freq_mhz            = 4.785
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 41.784500
+tx_lon_deg          = -124.254817
+association         = "OSU"
+
+[stations.WIN1]
+freq_mhz            = 4.785
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 43.665833
+tx_lon_deg          = -124.206500
+association         = "OSU"
+
+[stations.YHL1]
+freq_mhz            = 4.785
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 44.676167
+tx_lon_deg          = -124.077167
+association         = "OSU"
+
+[stations.BRAG]
+freq_mhz            = 4.785
+sweep_rate_hz_per_s = -25634.758
+sweep_bw_hz         = 25635
+sweep_repetition_hz = 1
+tx_lat_deg          = 39.438017
+tx_lon_deg          = -123.816117
+association         = "BML"
+
+[stations.PAFS]
+freq_mhz            = 4.785
+sweep_rate_hz_per_s = -25634.758
+sweep_bw_hz         = 25635
+sweep_repetition_hz = 1
+tx_lat_deg          = 38.928433
+tx_lon_deg          = -123.727767
+association         = "BML"
+
+# ---------------------------------------------------------------------------
+# US West Coast — 12 MHz band
+# ---------------------------------------------------------------------------
+
+[stations.STV2]
+freq_mhz            = 12.020
+sweep_rate_hz_per_s = -75073.242
+sweep_bw_hz         = 75073
+sweep_repetition_hz = 1
+tx_lat_deg          = 46.176417
+tx_lon_deg          = -123.978383
+association         = "OSU"
+
+[stations.YHS2]
+freq_mhz            = 12.142470
+sweep_rate_hz_per_s = -75073.242
+sweep_bw_hz         = 75073
+sweep_repetition_hz = 1
+tx_lat_deg          = 44.674200
+tx_lon_deg          = -124.075867
+association         = "OSU"
+
+[stations.GCYN]
+freq_mhz            = 12.145280
+sweep_rate_hz_per_s = -49438.477
+sweep_bw_hz         = 49438
+sweep_repetition_hz = 1
+tx_lat_deg          = 36.439450
+tx_lon_deg          = -121.922217
+association         = "NPS"
+
+[stations.SCRZ]
+freq_mhz            = 12.14528
+sweep_rate_hz_per_s = -49438.477
+sweep_bw_hz         = 49438
+sweep_repetition_hz = 1
+tx_lat_deg          = 36.949217
+tx_lon_deg          = -122.066100
+association         = "NPS"
+
+[stations.RFG1]
+freq_mhz            = 12.14965
+sweep_rate_hz_per_s = 100708.008
+sweep_bw_hz         = 100708
+sweep_repetition_hz = 1
+tx_lat_deg          = 34.461200
+tx_lon_deg          = -120.076700
+association         = "UCSB"
+
+[stations.SSD1]
+freq_mhz            = 12.14965
+sweep_rate_hz_per_s = 100708.008
+sweep_bw_hz         = 100708
+sweep_repetition_hz = 1
+tx_lat_deg          = 34.419000
+tx_lon_deg          = -119.596083
+association         = "UCSB"
+
+[stations.FBK1]
+freq_mhz            = 12.149650
+sweep_rate_hz_per_s = 101097.519
+sweep_bw_hz         = 101098
+sweep_repetition_hz = 1
+tx_lat_deg          = 34.869717
+tx_lon_deg          = -120.621283
+association         = "SLO"
+
+[stations.PTC1]
+freq_mhz            = 12.149650
+sweep_rate_hz_per_s = 101097.519
+sweep_bw_hz         = 101098
+sweep_repetition_hz = 1
+tx_lat_deg          = 34.448300
+tx_lon_deg          = -120.471700
+association         = "SLO"
+
+[stations.BML1]
+freq_mhz            = 12.156850
+sweep_rate_hz_per_s = -75363.602
+sweep_bw_hz         = 75364
+sweep_repetition_hz = 1
+tx_lat_deg          = 38.317317
+tx_lon_deg          = -123.072467
+association         = "BML"
+
+[stations.MONT]
+freq_mhz            = 12.189900
+sweep_rate_hz_per_s = -51467.827
+sweep_bw_hz         = 51468
+sweep_repetition_hz = 1
+tx_lat_deg          = 37.533717
+tx_lon_deg          = -122.519217
+association         = "SFSU"
+
+[stations.PESC]
+freq_mhz            = 12.190
+sweep_rate_hz_per_s = -51269.543
+sweep_bw_hz         = 51270
+sweep_repetition_hz = 1
+tx_lat_deg          = 37.252483
+tx_lon_deg          = -122.416567
+association         = "NPS"
+
+[stations.NPGS]
+freq_mhz            = 12.275
+sweep_rate_hz_per_s = -100708.008
+sweep_bw_hz         = 100708
+sweep_repetition_hz = 1
+tx_lat_deg          = 36.603333
+tx_lon_deg          = -121.871950
+association         = "NPS"
+
+# ---------------------------------------------------------------------------
+# US West Coast — 25 MHz band (short-range)
+# ---------------------------------------------------------------------------
+
+[stations.PBON]
+freq_mhz            = 24.100
+sweep_rate_hz_per_s = -99792.473
+sweep_bw_hz         = 199585
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 37.815483
+tx_lon_deg          = -122.529900
+association         = "SFSU"
+
+[stations.MLML]
+freq_mhz            = 24.120
+sweep_rate_hz_per_s = -150146.515
+sweep_bw_hz         = 300293
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 36.803667
+tx_lon_deg          = -121.787917
+association         = "NPS"
+
+[stations.SDPL]
+freq_mhz            = 24.500
+sweep_rate_hz_per_s = -101097.519
+sweep_bw_hz         = 202195
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 32.665833
+tx_lon_deg          = -117.239583
+association         = "SIO"
+
+# ---------------------------------------------------------------------------
+# US West Coast — 40 MHz band (very-short-range)
+# ---------------------------------------------------------------------------
+
+[stations.TRES]
+freq_mhz            = 40.750
+sweep_rate_hz_per_s = -375366.180
+sweep_bw_hz         = 750732
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 37.830467
+tx_lon_deg          = -122.377250
+association         = "SFSU"
+
+[stations.ANGL]
+freq_mhz            = 40.750
+sweep_rate_hz_per_s = -374979.889
+sweep_bw_hz         = 749960
+sweep_repetition_hz = 0.5
+tx_lat_deg          = 37.853317
+tx_lon_deg          = -122.419200
+association         = "SFSU"
+
+# ---------------------------------------------------------------------------
+# Maine / Atlantic Canada — 4.82 MHz band
+# ---------------------------------------------------------------------------
+
+[stations.CSTM]
+freq_mhz            = 4.820
+sweep_rate_hz_per_s = -33086.460
+sweep_bw_hz         = 33086
+sweep_repetition_hz = 1
+tx_lat_deg          = 44.086050
+tx_lon_deg          = -66.211433
+association         = "UMaine"
+
+[stations.GMNB]
+freq_mhz            = 4.820
+sweep_rate_hz_per_s = -33086.460
+sweep_bw_hz         = 33086
+sweep_repetition_hz = 1
+tx_lat_deg          = 44.600617
+tx_lon_deg          = -66.904467
+association         = "UMaine"
+
+[stations.GRNI]
+freq_mhz            = 4.820
+sweep_rate_hz_per_s = -33086.460
+sweep_bw_hz         = 33086
+sweep_repetition_hz = 1
+tx_lat_deg          = 44.024733
+tx_lon_deg          = -68.860717
+association         = "UMaine"
+
+[stations.CLHB]
+freq_mhz            = 4.820
+sweep_rate_hz_per_s = -32958.973
+sweep_bw_hz         = 32959
+sweep_repetition_hz = 1
+tx_lat_deg          = 43.455983
+tx_lon_deg          = -65.654650
+association         = "CCG"

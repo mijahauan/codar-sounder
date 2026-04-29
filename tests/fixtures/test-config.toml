@@ -1,0 +1,41 @@
+# Synthetic config for unit tests.  Three CODAR transmitters at 4.5 MHz
+# off the US east coast, all visible from a single notional radiod.
+
+[station]
+callsign     = "TEST"
+grid_square  = "EM38ww"
+receiver_lat = 38.811
+receiver_lon = -90.405
+
+[paths]
+output_dir = "/tmp/codar-sounder-test/output"
+log_dir    = "/tmp/codar-sounder-test/log"
+
+[[radiod]]
+id           = "test-rx888"
+status_dns   = "test-status.local"
+channel_name = "codar-4mhz"
+
+[[radiod.transmitter]]
+id                  = "DUCK"
+center_freq_hz      = 4537180
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 36.180350
+tx_lon_deg          = -75.750133
+
+[[radiod.transmitter]]
+id                  = "LISL"
+center_freq_hz      = 4575000
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
+sweep_repetition_hz = 1
+tx_lat_deg          = 36.691717
+tx_lon_deg          = -75.922633
+
+[processing]
+coherent_seconds = 60
+range_min_km     = 200
+range_max_km     = 800
+snr_threshold_db = 5.0
