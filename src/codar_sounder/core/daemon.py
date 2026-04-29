@@ -244,6 +244,26 @@ class SounderDaemon:
         self.range_max_km = float(self.processing.get("range_max_km", 800))
         self.snr_threshold_db = float(self.processing.get("snr_threshold_db", 5.0))
 
+        # Crash-safe channel cleanup via radiod's LIFETIME tag (ka9q-python
+        # 7c6af73+, radiod 0f8b622+).  Default: 2 × CPI seconds at the
+        # radiod default frame rate (50 Hz at 20 ms blocktime).  Each CPI
+        # yield refreshes the lifetime, so a missed CPI is tolerated; if
+        # the daemon dies, the channel self-destructs within 2 × CPI.
+        # Operators can override to 0 (= explicit infinite, matches
+        # pre-v0.4 behaviour) or any positive frame count.  ``None``
+        # would be ambiguous in TOML (omitting the key gives the default).
+        self.radiod_lifetime_frames: Optional[int] = self.processing.get(
+            "radiod_lifetime_frames",
+            int(round(2 * self.coherent_seconds * 50)),
+        )
+        if self.radiod_lifetime_frames is not None:
+            self.radiod_lifetime_frames = int(self.radiod_lifetime_frames)
+            if self.radiod_lifetime_frames < 0:
+                raise ValueError(
+                    f"processing.radiod_lifetime_frames must be ≥ 0; got "
+                    f"{self.radiod_lifetime_frames}"
+                )
+
         receiver_lat = float(self.station.get("receiver_lat", 0.0))
         receiver_lon = float(self.station.get("receiver_lon", 0.0))
         output_dir = Path(self.paths.get("output_dir", "/var/lib/codar-sounder"))
@@ -290,6 +310,13 @@ class SounderDaemon:
             "synthetic_target_group_range_km", default_synth_p
         ))
 
+        # 0 in config means "explicit infinite" — pass None to ka9q-python
+        # so the LIFETIME tag is omitted (and per-CPI refresh is skipped).
+        # Any positive value enables crash-safe cleanup.
+        lifetime_for_source: Optional[int] = (
+            None if self.radiod_lifetime_frames in (None, 0)
+            else self.radiod_lifetime_frames
+        )
         self.iq_source = make_iq_source(
             radiod_status_dns=self.status_dns,
             channel_name=self.channel_name,
@@ -301,6 +328,7 @@ class SounderDaemon:
             preset=str(radiod_block.get("preset", "iq")),
             fallback_target_group_range_km=synth_p,
             force_synthetic=force_synthetic,
+            lifetime_frames=lifetime_for_source,
         )
 
     def run(self) -> None:

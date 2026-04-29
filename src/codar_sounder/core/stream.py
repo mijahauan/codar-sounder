@@ -171,6 +171,7 @@ class RadiodIQSource:
         cpi_seconds: float,
         center_freq_hz: float,
         preset: str = "iq",
+        lifetime_frames: Optional[int] = None,
     ):
         import queue as _q                   # stdlib
 
@@ -180,6 +181,13 @@ class RadiodIQSource:
         self.cpi_seconds = float(cpi_seconds)
         self.center_freq_hz = float(center_freq_hz)
         self.preset = preset
+        # Optional crash-safe channel cleanup (ka9q-python 7c6af73+,
+        # radiod 0f8b622+).  When set, the channel is provisioned with
+        # this lifetime in radiod main-loop frames (~50 Hz at default
+        # blocktime) and the daemon refreshes it after every CPI so the
+        # channel auto-destructs if the daemon dies.  None = leave the
+        # channel infinite (v0.3 and earlier behaviour).
+        self.lifetime_frames = lifetime_frames
         self._control = None
         self._stream = None
         self._channel_info = None
@@ -259,17 +267,24 @@ class RadiodIQSource:
         # that overflow to ~10³⁸.  F32LE delivers the underlying IQ
         # cleanly: every sample finite, magnitudes in the expected
         # ~10⁻⁵ to ~10⁻⁴ range, no decoder pathology.
-        self._channel_info = self._control.ensure_channel(
+        ensure_kwargs = dict(
             frequency_hz=float(self.center_freq_hz),
             preset=self.preset,
             sample_rate=int(self.sample_rate_hz),
             encoding=4,            # F32LE
         )
+        # Pass `lifetime` only when we have one — older ka9q-python without
+        # the keep-alive feature would reject the unknown kwarg.
+        if self.lifetime_frames is not None:
+            ensure_kwargs["lifetime"] = int(self.lifetime_frames)
+        self._channel_info = self._control.ensure_channel(**ensure_kwargs)
         log.info(
-            "RadiodIQSource: channel ready: ssrc=%s mcast=%s:%d",
+            "RadiodIQSource: channel ready: ssrc=%s mcast=%s:%d lifetime=%s",
             self._channel_info.ssrc,
             self._channel_info.multicast_address,
             self._channel_info.port,
+            "infinite" if self.lifetime_frames is None
+            else f"{self.lifetime_frames} frames (refreshed per CPI)",
         )
         self._stream = _ka9q_RadiodStream(                  # type: ignore[name-defined]
             channel=self._channel_info,
@@ -293,6 +308,22 @@ class RadiodIQSource:
                     filled += take
                     idx += take
                     if filled == n_samples:
+                        # Crash-safe keep-alive: if a finite lifetime was
+                        # configured, refresh it before yielding so the
+                        # channel survives the consumer's processing time.
+                        # Failure here (radiod restart, network blip) must
+                        # not crash the daemon — log and continue.
+                        if self.lifetime_frames is not None:
+                            try:
+                                self._control.set_channel_lifetime(
+                                    self._channel_info.ssrc,
+                                    int(self.lifetime_frames),
+                                )
+                            except Exception as exc:
+                                log.warning(
+                                    "RadiodIQSource: lifetime refresh failed: %s",
+                                    exc,
+                                )
                         yield buf.copy()
                         filled = 0
         finally:
@@ -321,6 +352,7 @@ def make_iq_source(
     preset: str = "iq",
     fallback_target_group_range_km: float = 500.0,
     force_synthetic: bool = False,
+    lifetime_frames: Optional[int] = None,
 ):
     """Construct an IQ source, falling back to synthetic if radiod isn't available.
 
@@ -337,6 +369,7 @@ def make_iq_source(
                 cpi_seconds=cpi_seconds,
                 center_freq_hz=center_freq_hz,
                 preset=preset,
+                lifetime_frames=lifetime_frames,
             )
         except ModuleNotFoundError as exc:
             log.warning(

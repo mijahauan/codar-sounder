@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codar-sounder"
-version = "0.3.0"
+version = "0.3.1"
 description = "Opportunistic ionospheric sounder using CODAR FMCW chirp transmissions"
 requires-python = ">=3.10"
 license = {text = "MIT"}
