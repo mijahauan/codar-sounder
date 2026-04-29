@@ -26,3 +26,6 @@ htmlcov/
 *.swp
 *.swo
 .DS_Store
+
+# uv tooling
+uv.lock

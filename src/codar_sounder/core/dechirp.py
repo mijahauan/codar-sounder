@@ -66,6 +66,7 @@ def make_replica(
     sweep_rate_hz_per_s: float,
     *,
     window: bool = True,
+    phase_offset_samples: int = 0,
 ) -> np.ndarray:
     """Generate one FMCW chirp replica at complex baseband.
 
@@ -84,14 +85,30 @@ def make_replica(
         sweep_rate_hz_per_s: signed sweep rate (Hz/s).  Sign matters: a
             CODAR down-chirp has ``κ < 0``; up-chirps have ``κ > 0``.
         window: apply a Hann window to suppress FFT sidelobes.
+        phase_offset_samples: TDMA sweep-start phase, in samples within
+            one sweep period.  When two CODAR transmitters share a band
+            via TDMA, each starts its sweep at a different phase within
+            the 1 s period; pass that phase here to build a replica that
+            matches a specific transmitter.  The phase wraps modulo
+            ``n_samples``: passing ``n_samples//4`` builds a replica that
+            had been sweeping for a quarter-period when our window opens,
+            so its instantaneous frequency at t=0 is ``κ · n_samples/4 /
+            sample_rate_hz`` rather than 0.  Default 0 = standard
+            zero-offset replica (compatible with v0.2 callers).
     """
     if n_samples <= 0:
         raise ValueError(f"n_samples must be > 0; got {n_samples}")
     if sample_rate_hz <= 0:
         raise ValueError(f"sample_rate_hz must be > 0; got {sample_rate_hz}")
 
-    t = np.arange(n_samples) / sample_rate_hz
-    phase = 2.0 * np.pi * 0.5 * sweep_rate_hz_per_s * t * t
+    # Compute the time axis modulo one sweep period so the replica
+    # wraps continuously: a TX whose sweep started ``phase_offset_samples``
+    # samples ago is, at our t=0, ``phase_offset_samples / sample_rate_hz``
+    # seconds into its sweep.  When that elapsed time crosses one full
+    # period, the sweep restarts → the modulo handles the wrap cleanly.
+    offset = int(phase_offset_samples) % n_samples
+    t_into_sweep = ((np.arange(n_samples) + offset) % n_samples) / sample_rate_hz
+    phase = 2.0 * np.pi * 0.5 * sweep_rate_hz_per_s * t_into_sweep * t_into_sweep
     replica = np.exp(1j * phase)
     if window:
         replica = replica * np.hanning(n_samples)
@@ -105,6 +122,7 @@ def dechirp(
     sweep_rate_hz_per_s: float,
     sweep_repetition_hz: float,
     apply_window: bool = True,
+    phase_offset_samples: int = 0,
 ) -> DechirpResult:
     """Dechirp a CPI of received IQ samples and return the range-Doppler matrix.
 
@@ -124,6 +142,9 @@ def dechirp(
             unambiguous bandwidth.
         apply_window: pass a Hann window through to the replica
             generator.
+        phase_offset_samples: TDMA sweep-start phase for this TX (see
+            ``make_replica``).  Selects which TX in a shared band to
+            dechirp.  Default 0 = zero-offset replica (v0.2 behaviour).
     """
     if rx_samples.dtype.kind != "c":
         raise ValueError(
@@ -154,7 +175,9 @@ def dechirp(
     # complex-conjugate.  The result has a beat tone for each propagation
     # mode at frequency = sweep_rate · path_delay.
     replica = make_replica(
-        n_samples, sample_rate_hz, sweep_rate_hz_per_s, window=apply_window
+        n_samples, sample_rate_hz, sweep_rate_hz_per_s,
+        window=apply_window,
+        phase_offset_samples=phase_offset_samples,
     )
     dechirped = rx_matrix * np.conj(replica)
 

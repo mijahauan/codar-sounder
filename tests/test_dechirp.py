@@ -40,6 +40,7 @@ def _synth_chirp(
     sweep_rate_hz_per_s: float = SWEEP_RATE_HZ_PER_S,
     srf_hz: float = SRF_HZ,
     noise_db: float = -60.0,
+    target_tdma_offsets_s: list[float] | None = None,
 ) -> np.ndarray:
     """Synthesise a CPI of received IQ for a given list of targets.
 
@@ -47,20 +48,32 @@ def _synth_chirp(
     at the specified delay (seconds) and amplitude (linear).  Targets'
     chirps wrap into the next sweep period naturally — the modulo
     on ``t`` reproduces a continuously transmitting CODAR.
+
+    ``target_tdma_offsets_s`` (per-target, defaults to all zero) shifts
+    each TX's sweep-start time within the period — used to synthesise
+    multiple co-band TDMA-multiplexed transmitters.  An offset of 0.5 s
+    on a 1 Hz SRF means the TX's chirp is half-way through its period
+    when our buffer starts.
     """
+    if target_tdma_offsets_s is None:
+        target_tdma_offsets_s = [0.0] * len(target_delays_s)
+    if len(target_tdma_offsets_s) != len(target_delays_s):
+        raise ValueError("target_tdma_offsets_s must match target_delays_s in length")
+
     t = np.arange(n_total_samples) / sample_rate_hz
     sweep_period = 1.0 / srf_hz
 
     rx = np.zeros(n_total_samples, dtype=np.complex64)
-    for delay, amp in zip(target_delays_s, target_amplitudes):
-        # The transmitted chirp has phase 2π·½·κ·t² and repeats every
-        # sweep_period.  A delayed echo is the same chirp evaluated at
-        # (t - delay), with the modulo accounting for sweep wrap.
-        t_shifted = (t - delay) % sweep_period
-        # Mask out samples before the first echo arrives — that
-        # synthesises the no-pre-target-energy case cleanly.
-        valid = t >= delay
-        phase = 2.0 * np.pi * 0.5 * sweep_rate_hz_per_s * t_shifted ** 2
+    for delay, amp, tdma in zip(
+        target_delays_s, target_amplitudes, target_tdma_offsets_s
+    ):
+        # The TX's sweep starts at t = tdma; its chirp at our receiver
+        # arrives delayed by the propagation time `delay`.  At sample n
+        # (time t = n/Fs) the TX has been sweeping for
+        # ((t - tdma - delay) mod sweep_period) seconds.
+        t_into_sweep = (t - tdma - delay) % sweep_period
+        valid = t >= (tdma + delay)
+        phase = 2.0 * np.pi * 0.5 * sweep_rate_hz_per_s * t_into_sweep ** 2
         echo = amp * np.exp(1j * phase).astype(np.complex64)
         echo[~valid] = 0
         rx += echo
@@ -258,3 +271,129 @@ class TestDechirpOutputShape:
                 sweep_rate_hz_per_s=SWEEP_RATE_HZ_PER_S,
                 sweep_repetition_hz=0,
             )
+
+
+# ---------------------------------------------------------------------------
+# TDMA — phase-offset replica separates co-band transmitters
+# ---------------------------------------------------------------------------
+
+class TestPhaseOffsetReplica:
+    """A replica with `phase_offset_samples=k` is the same chirp
+    sweeping for `k/Fs` seconds before our buffer's sample 0 — its
+    instantaneous frequency at t=0 is κ·k/Fs Hz, not 0.  Verifies the
+    new parameter wires through correctly without breaking v0.2 paths.
+    """
+
+    def test_zero_offset_matches_v02_default(self):
+        r0 = make_replica(N_SAMPLES, SAMPLE_RATE_HZ, SWEEP_RATE_HZ_PER_S)
+        r0_default = make_replica(
+            N_SAMPLES, SAMPLE_RATE_HZ, SWEEP_RATE_HZ_PER_S,
+            phase_offset_samples=0,
+        )
+        assert np.array_equal(r0, r0_default)
+
+    def test_offset_changes_replica(self):
+        r0 = make_replica(
+            N_SAMPLES, SAMPLE_RATE_HZ, SWEEP_RATE_HZ_PER_S, window=False,
+        )
+        r_off = make_replica(
+            N_SAMPLES, SAMPLE_RATE_HZ, SWEEP_RATE_HZ_PER_S, window=False,
+            phase_offset_samples=N_SAMPLES // 4,
+        )
+        # Offsetting should not produce a trivially-equal replica.
+        assert not np.allclose(r0, r_off)
+
+    def test_full_period_offset_wraps_to_zero(self):
+        """Offset = N is one full period → wraps modulo N → identical to 0."""
+        r0 = make_replica(
+            N_SAMPLES, SAMPLE_RATE_HZ, SWEEP_RATE_HZ_PER_S, window=False,
+        )
+        r_full = make_replica(
+            N_SAMPLES, SAMPLE_RATE_HZ, SWEEP_RATE_HZ_PER_S, window=False,
+            phase_offset_samples=N_SAMPLES,
+        )
+        assert np.allclose(r0, r_full, atol=1e-5)
+
+
+class TestTDMASeparation:
+    """Two TXs at different TDMA offsets in the same band should each be
+    cleanly extracted by their own offset replica, with substantial
+    cross-suppression of the other.
+    """
+
+    def _two_tx_iq(self, tdma_a_s: float, tdma_b_s: float, n_sweeps: int = 8):
+        """Synthesise a CPI containing TX_A at one delay and TX_B at another,
+        each with a distinct TDMA sweep-start offset.
+        """
+        # Two distinct propagation delays so we can tell which TX
+        # produced which peak in the dechirp output.
+        delay_a = 600.0 / C_KM_PER_S         # TX_A: 600 km direct
+        delay_b = 1200.0 / C_KM_PER_S        # TX_B: 1200 km direct
+        return _synth_chirp(
+            n_total_samples=n_sweeps * N_SAMPLES,
+            target_delays_s=[delay_a, delay_b],
+            target_amplitudes=[1.0, 1.0],
+            target_tdma_offsets_s=[tdma_a_s, tdma_b_s],
+            noise_db=-80.0,
+        )
+
+    def test_offset_a_extracts_tx_a_suppresses_tx_b(self):
+        """Dechirping with TX_A's offset → strong peak at TX_A's range,
+        weak/diffuse energy at TX_B's range.
+        """
+        # TX_A at offset 0, TX_B at offset 0.5 s (half-period).
+        rx = self._two_tx_iq(tdma_a_s=0.0, tdma_b_s=0.5)
+
+        # Replica aligned to TX_A (zero offset).
+        result_a = dechirp(
+            rx,
+            sample_rate_hz=SAMPLE_RATE_HZ,
+            sweep_rate_hz_per_s=SWEEP_RATE_HZ_PER_S,
+            sweep_repetition_hz=SRF_HZ,
+            phase_offset_samples=0,
+        )
+        ranges, prof_a = positive_range_window(result_a, range_profile(result_a))
+
+        # Find peak power near TX_A's true range (600 km) and near TX_B's (1200 km).
+        def power_near(range_km: float, tol_km: float = 30.0) -> float:
+            mask = np.abs(ranges - range_km) < tol_km
+            return float(prof_a[mask].max()) if np.any(mask) else 0.0
+
+        p_at_a = power_near(600.0)
+        p_at_b = power_near(1200.0)
+
+        # When we dechirp with TX_A's offset, TX_A should dominate.
+        # Cross-suppression: ≥10 dB stronger at TX_A than at TX_B.
+        ratio_db = 10.0 * np.log10(p_at_a / max(p_at_b, 1e-30))
+        assert ratio_db > 10.0, (
+            f"TX_A peak {10*np.log10(p_at_a):.1f} dB vs TX_B "
+            f"{10*np.log10(p_at_b):.1f} dB; expected ≥10 dB suppression"
+        )
+
+    def test_offset_b_extracts_tx_b_suppresses_tx_a(self):
+        """Symmetric: dechirping with TX_B's offset → TX_B wins."""
+        rx = self._two_tx_iq(tdma_a_s=0.0, tdma_b_s=0.5)
+
+        # TX_B's TDMA offset = 0.5 s = N_SAMPLES // 2 samples.
+        offset_b_samples = int(0.5 * SAMPLE_RATE_HZ)
+        result_b = dechirp(
+            rx,
+            sample_rate_hz=SAMPLE_RATE_HZ,
+            sweep_rate_hz_per_s=SWEEP_RATE_HZ_PER_S,
+            sweep_repetition_hz=SRF_HZ,
+            phase_offset_samples=offset_b_samples,
+        )
+        ranges, prof_b = positive_range_window(result_b, range_profile(result_b))
+
+        def power_near(range_km: float, tol_km: float = 30.0) -> float:
+            mask = np.abs(ranges - range_km) < tol_km
+            return float(prof_b[mask].max()) if np.any(mask) else 0.0
+
+        p_at_a = power_near(600.0)
+        p_at_b = power_near(1200.0)
+
+        ratio_db = 10.0 * np.log10(p_at_b / max(p_at_a, 1e-30))
+        assert ratio_db > 10.0, (
+            f"TX_B peak {10*np.log10(p_at_b):.1f} dB vs TX_A "
+            f"{10*np.log10(p_at_a):.1f} dB; expected ≥10 dB suppression"
+        )

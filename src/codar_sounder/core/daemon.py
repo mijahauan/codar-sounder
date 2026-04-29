@@ -88,6 +88,12 @@ class _TransmitterPipeline:
         self.sweep_rate_hz_per_s = float(tx_config["sweep_rate_hz_per_s"])
         self.sweep_bw_hz = float(tx_config["sweep_bw_hz"])
         self.sweep_repetition_hz = float(tx_config["sweep_repetition_hz"])
+        # Optional TDMA sweep-start phase, in samples within one period.
+        # Operator-supplied (or `codar-sounder tdma-scan` discovered);
+        # default 0 = v0.2 behaviour (no phase alignment).  Co-band TXs
+        # at the same frequency cannot be distinguished without this
+        # — see core/tdma.py.
+        self.tdma_offset_samples = int(tx_config.get("tdma_offset_samples", 0))
 
         self.ground_distance_km = haversine_km(
             receiver_lat, receiver_lon,
@@ -110,10 +116,10 @@ class _TransmitterPipeline:
         )
         log.info(
             "pipeline init: tx=%s freq=%d Hz κ=%.1f Hz/s BW=%.0f Hz "
-            "TX-RX dist=%.1f km ΔP_resolution=%.1f km",
+            "TX-RX dist=%.1f km ΔP_resolution=%.1f km tdma_offset=%d samples",
             self.station_id, self.center_freq_hz, self.sweep_rate_hz_per_s,
             self.sweep_bw_hz, self.ground_distance_km,
-            self.group_range_uncertainty_km,
+            self.group_range_uncertainty_km, self.tdma_offset_samples,
         )
 
     def process_cpi(self, rx_samples) -> Optional[Path]:
@@ -129,6 +135,7 @@ class _TransmitterPipeline:
                 sample_rate_hz=self.sample_rate_hz,
                 sweep_rate_hz_per_s=self.sweep_rate_hz_per_s,
                 sweep_repetition_hz=self.sweep_repetition_hz,
+                phase_offset_samples=self.tdma_offset_samples,
             )
         except Exception as exc:
             log.warning("[%s] dechirp failed: %s", self.station_id, exc)

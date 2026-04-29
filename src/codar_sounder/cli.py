@@ -87,6 +87,20 @@ def main():
                        help="ID of the [[radiod]] block to use")
     _common(p_dae)
 
+    p_tdma = sub.add_parser(
+        "tdma-scan",
+        help="Capture IQ from a radiod and discover TDMA TX offsets in the band",
+    )
+    p_tdma.add_argument("--radiod-id", default=None,
+                        help="ID of the [[radiod]] block to use")
+    p_tdma.add_argument("--seconds", type=int, default=10,
+                        help="Capture duration before discovery (default 10 s)")
+    p_tdma.add_argument("--snr-threshold-db", type=float, default=10.0,
+                        help="Minimum SNR for a peak to be reported")
+    p_tdma.add_argument("--json", action="store_true",
+                        help="Emit JSON instead of human-readable output")
+    _common(p_tdma)
+
     p_cfg = sub.add_parser("config", help="Configure codar-sounder")
     cfg_sub = p_cfg.add_subparsers(dest="config_command")
     p_init = cfg_sub.add_parser("init", help="write fresh config from template")
@@ -115,6 +129,8 @@ def main():
         _handle_version(args)
     elif args.command == "daemon":
         _handle_daemon(args)
+    elif args.command == "tdma-scan":
+        _handle_tdma_scan(args)
     elif args.command == "config":
         _handle_config(args)
     else:
@@ -203,6 +219,165 @@ def _handle_daemon(args):
 
     daemon = SounderDaemon(config, block)
     daemon.run()
+
+
+def _handle_tdma_scan(args):
+    """Capture IQ for one CPI and run TDMA offset discovery on it.
+
+    Output (human-readable):
+        TDMA scan on radiod=bee1-rx888 channel=codar-4mhz κ=-25733.9 Hz/s
+        capture: 10 s = 640000 samples at 64000 Hz
+        discovered 3 peaks (snr_threshold=10 dB):
+          peak 1: offset_samples=  256  snr=42.3 dB
+          peak 2: offset_samples=21504  snr=38.1 dB
+          peak 3: offset_samples=43008  snr=35.7 dB
+        per-TX TDMA offsets (after subtracting ground delay):
+          LISL (D=380 km, 81 samples): tdma_offset_samples=175
+          ASSA (D=560 km, 119 samples): tdma_offset_samples=21385
+          CEDR (D=580 km, 124 samples): tdma_offset_samples=42884
+
+    Operator pastes the per-TX values into the [[radiod.transmitter]]
+    blocks of /etc/codar-sounder/codar-sounder-config.toml.
+    """
+    _install_sighup_handler()
+    from codar_sounder.config import (
+        haversine_km, load_config, resolve_radiod_block, transmitters,
+    )
+    from codar_sounder.core.stream import make_iq_source
+    from codar_sounder.core.tdma import (
+        discover_tx_offsets, match_peaks_to_txs,
+    )
+
+    config_path = _resolved_config_path(args)
+    config = load_config(config_path)
+    block = resolve_radiod_block(config, args.radiod_id)
+
+    txs = list(transmitters(block))
+    if not txs:
+        sys.stderr.write(
+            f"No [[transmitter]] blocks found for radiod "
+            f"{block.get('id', '?')}\n"
+        )
+        sys.exit(2)
+
+    # Open an IQ source against the radiod (or synthetic fallback) for
+    # one capture window, then close it.
+    sample_rate_hz = float(
+        config.get("processing", {}).get("sample_rate_hz", 64000)
+    )
+    first_tx = txs[0]
+    iq_source = make_iq_source(
+        radiod_status_dns=str(block.get("status_dns", "")),
+        channel_name=str(block.get("channel_name", "codar")),
+        sample_rate_hz=sample_rate_hz,
+        cpi_seconds=float(args.seconds),
+        sweep_rate_hz_per_s=float(first_tx["sweep_rate_hz_per_s"]),
+        sweep_repetition_hz=float(first_tx["sweep_repetition_hz"]),
+        center_freq_hz=float(first_tx["center_freq_hz"]),
+        preset=str(block.get("preset", "iq")),
+        fallback_target_group_range_km=500.0,
+        force_synthetic=False,
+    )
+
+    log = logging.getLogger("codar_sounder.tdma_scan")
+    log.info(
+        "tdma-scan: radiod=%s channel=%s capture=%d s sample_rate=%d Hz",
+        block.get("id", "?"), block.get("channel_name", "?"),
+        args.seconds, int(sample_rate_hz),
+    )
+
+    try:
+        rx_samples = next(iter(iq_source))
+    except StopIteration:
+        sys.stderr.write("IQ source produced no samples\n")
+        sys.exit(3)
+    finally:
+        if hasattr(iq_source, "stop"):
+            iq_source.stop()
+
+    sweep_rate_hz_per_s = float(first_tx["sweep_rate_hz_per_s"])
+    sweep_repetition_hz = float(first_tx["sweep_repetition_hz"])
+    n_per_sweep = int(round(sample_rate_hz / sweep_repetition_hz))
+
+    peaks = discover_tx_offsets(
+        rx_samples,
+        sample_rate_hz=sample_rate_hz,
+        sweep_rate_hz_per_s=sweep_rate_hz_per_s,
+        sweep_repetition_hz=sweep_repetition_hz,
+        snr_threshold_db=float(args.snr_threshold_db),
+    )
+
+    receiver_lat = float(config.get("station", {}).get("receiver_lat", 0.0))
+    receiver_lon = float(config.get("station", {}).get("receiver_lon", 0.0))
+    tx_distances = {
+        tx["id"]: haversine_km(
+            receiver_lat, receiver_lon,
+            float(tx["tx_lat_deg"]), float(tx["tx_lon_deg"]),
+        )
+        for tx in txs
+    }
+    tdma_offsets = match_peaks_to_txs(
+        peaks, tx_distances,
+        sample_rate_hz=sample_rate_hz,
+        n_per_sweep=n_per_sweep,
+    )
+
+    if args.json:
+        out = {
+            "radiod_id": block.get("id", ""),
+            "channel_name": block.get("channel_name", ""),
+            "sample_rate_hz": int(sample_rate_hz),
+            "sweep_rate_hz_per_s": sweep_rate_hz_per_s,
+            "sweep_repetition_hz": sweep_repetition_hz,
+            "n_per_sweep": n_per_sweep,
+            "capture_seconds": int(args.seconds),
+            "peaks": [
+                {
+                    "offset_samples": p.offset_samples,
+                    "snr_db": round(p.snr_db, 2),
+                    "correlation_power": p.correlation_power,
+                }
+                for p in peaks
+            ],
+            "tx_assignments": [
+                {
+                    "id": tx_id,
+                    "ground_distance_km": round(tx_distances[tx_id], 2),
+                    "tdma_offset_samples": tdma_offsets[tx_id],
+                }
+                for tx_id in tdma_offsets
+            ],
+        }
+        print(json.dumps(out, indent=2))
+        return
+
+    print(
+        f"TDMA scan on radiod={block.get('id','?')} "
+        f"channel={block.get('channel_name','?')} "
+        f"κ={sweep_rate_hz_per_s:.1f} Hz/s SRF={sweep_repetition_hz:.1f} Hz"
+    )
+    print(
+        f"capture: {args.seconds} s = {len(rx_samples)} samples at "
+        f"{int(sample_rate_hz)} Hz"
+    )
+    print(
+        f"discovered {len(peaks)} peak(s) "
+        f"(snr_threshold={args.snr_threshold_db:g} dB):"
+    )
+    for i, p in enumerate(peaks, start=1):
+        print(
+            f"  peak {i}: offset_samples={p.offset_samples:>7d}  "
+            f"snr={p.snr_db:.1f} dB"
+        )
+    print("per-TX TDMA offsets (after subtracting ground delay):")
+    for tx_id, offset in tdma_offsets.items():
+        D = tx_distances[tx_id]
+        if offset is None:
+            print(f"  {tx_id}: D={D:.0f} km — no peak matched")
+        else:
+            print(
+                f"  {tx_id}: D={D:.0f} km → tdma_offset_samples={offset}"
+            )
 
 
 def _handle_config(args):
