@@ -18,8 +18,14 @@ log_dir      = "/var/log/codar-sounder"
 
 # One [[radiod]] block per local radiod that codar-sounder uses.
 # Each daemon (one per systemd instance) picks the matching block via
-# --radiod-id.  The channel_name must match a wide IQ channel declared
-# in the corresponding [[radiod.fragment]].
+# --radiod-id.
+#
+# channel_name is informational only — the v0.4+ daemon provisions
+# the radiod channel dynamically via ka9q-python's ensure_channel()
+# (SSRC is computed from frequency + demod params), so no radiod
+# restart is required when switching bands or sample rates.  The
+# [[radiod.fragment]] block in etc/radiod-fragment.conf is retained
+# for backwards compatibility but is NOT consulted by the daemon.
 [[radiod]]
 id           = "bee1-rx888"
 status_dns   = "bee1-status.local"
@@ -57,13 +63,64 @@ tx_lon_deg          = -75.750133
 # id           = "MVCO"
 # ...
 
+# ---------------------------------------------------------------------------
+# Band-selection hints (operator notes — uncomment + adapt to your site)
+# ---------------------------------------------------------------------------
+#
+# 4.5 MHz cluster (long-range CODAR, 25 kHz sweep BW)
+#   * Path loss: D-layer absorption kills daytime hops <1500 km; works well
+#     at night (no D-layer) and at dawn/dusk grey-line.
+#   * Use with sample_rate_hz = 64000 (covers ±32 kHz; chirp is ±12.9 kHz).
+#
+# 13.45 MHz cluster (mid-range CODAR, 50 kHz sweep BW)
+#   * Path loss: low daytime; F2 single-hop sweet spot for ~1000-2500 km.
+#   * Use with sample_rate_hz = 64000 (still > Nyquist for the chirp;
+#     near-Nyquist filter trims the rest).  TX example for a site near
+#     EM38ww (verified producing 10-15 dB SNR detections at midday UTC):
+#
+# [[radiod.transmitter]]
+# id                  = "SEAB"
+# center_freq_hz      = 13450000
+# sweep_rate_hz_per_s = -49629.688
+# sweep_bw_hz         = 49630
+# sweep_repetition_hz = 1
+# tx_lat_deg          = 40.362633
+# tx_lon_deg          = -73.972400
+#
+# [[radiod.transmitter]]
+# id                  = "SPRK"
+# center_freq_hz      = 13450000
+# sweep_rate_hz_per_s = -49629.688
+# sweep_bw_hz         = 49630
+# sweep_repetition_hz = 1
+# tx_lat_deg          = 39.935183
+# tx_lon_deg          = -74.072017
+
 [processing]
 # Coherent processing interval — number of seconds of IQ to integrate
 # before publishing one record.  60 s gives ~5 cm/s velocity resolution
-# at 4.5 MHz (Kaeppler 2022 §2.1).
+# at 4.5 MHz (Kaeppler 2022 §2.1).  15 s is a good interactive default
+# (one record per 15 s window, matching smd codar-watch's cadence) at
+# the cost of coarser velocity resolution.
 coherent_seconds = 60
+
+# IQ sample rate the daemon requests from radiod via ensure_channel().
+# MUST land on ka9q-radio's integer-samples-per-block grid, else radiod
+# silently rounds to the nearest valid rate and the daemon's verify-
+# readback times out.  At ka9q-radio's default 20 ms block time the
+# grid is N × 50 Hz; common safe values:
+#   * 64000  (1280 samples/block) — covers 4 MHz and 13 MHz chirp BWs
+#   * 96000  (1920 samples/block) — extra guard for 13 MHz
+#   * 128000 (2560 samples/block) — comfortable for 24 MHz CODAR
+# 65536 looks like a power-of-two convenience but isn't on the grid —
+# do not use.
+sample_rate_hz   = 64000
+
 # Range gate (km, group range) for F-region returns.
 range_min_km     = 200
 range_max_km     = 800
-# Minimum SNR (dB) for a peak to be reported.
+
+# Minimum SNR (dB) for a peak to be reported.  1-2 dB on 4 MHz tends to
+# capture mostly RFI/noise; 5+ dB is appropriate on 13 MHz under
+# typical daytime F2 propagation.
 snr_threshold_db = 5.0
