@@ -8,13 +8,12 @@ Contract layout (sigmond/docs/CLIENT-CONTRACT.md):
   §12  validate --json — config validation
   §14  configuration interview — config init/edit
   §15  radiod channel contributions ([[radiod.fragment]])
-  §17  output sinks — data_sinks array per instance (file/clickhouse)
+  §17  output sinks — data_sinks array per instance (file)
 """
 
 from __future__ import annotations
 
 import logging
-import os
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Any
@@ -61,10 +60,9 @@ def build_inventory(config: dict, config_path: Path) -> dict:
             tx_id = tx.get("id", "<unnamed>")
             freq = int(tx.get("center_freq_hz", 0))
 
-            # CONTRACT v0.6 §17 — output sinks per instance.  JSONL
+            # CONTRACT v0.6 §17 — output sinks per instance.  The JSONL
             # spool is the canonical L1 artefact (Kaeppler-compatible
-            # Zenodo schema); the CH sink is added when sigmond has
-            # published SIGMOND_CLICKHOUSE_URL into the env.
+            # Zenodo schema).
             data_sinks: list[dict[str, Any]] = [
                 {
                     "kind":           "file",
@@ -74,15 +72,6 @@ def build_inventory(config: dict, config_path: Path) -> dict:
                     "mb_per_day":     5,
                 },
             ]
-            if os.environ.get("SIGMOND_CLICKHOUSE_URL", "").strip():
-                data_sinks.append({
-                    "kind":           "clickhouse",
-                    "target":         "codar.spots",
-                    "schema_ref":     "codar:1",
-                    "retention_days": 90,
-                    "mb_per_day":     1,        # ~1 row/min/peak; tiny
-                    "health":         "ok",
-                })
 
             instance: dict[str, Any] = {
                 "instance": tx_id,

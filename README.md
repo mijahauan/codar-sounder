@@ -37,12 +37,11 @@ trace → invert → JSONL+CH writer per CPI:
     one record per detected peak with `peak_index` / `peak_count` /
     `mode_layer`.  Remains the canonical L1 artefact (Kaeppler-
     compatible Zenodo schema).
-  * **ClickHouse sink** (CONTRACT v0.6 §17) — when sigmond publishes
-    `SIGMOND_CLICKHOUSE_URL` into coordination.env, every per-peak
-    record is also written to `codar.spots` via
-    `sigmond.hamsci_ch.Writer`.  Schema in `clickhouse/schema/codar/`.
-    The CH path is additive; CH-disabled hosts stay file-only with no
-    extra moving parts.
+  * **HamSCI sink** (CONTRACT v0.6 §17) — when the local HamSCI sink
+    (a SQLite store-and-forward queue managed by sigmond) is in play,
+    every per-peak record is also written to `codar.spots` via
+    `sigmond.hamsci_sink.Writer`.  The sink path is additive; hosts
+    without it stay file-only with no extra moving parts.
 
 **v0.4.0 highlights:**
 

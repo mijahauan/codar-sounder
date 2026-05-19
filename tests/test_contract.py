@@ -23,11 +23,11 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess:
     """Run codar-sounder CLI as a subprocess and capture stdout/stderr."""
     cmd = [sys.executable, "-m", "codar_sounder.cli", *args,
            "--config", str(TEST_CONFIG)]
+    env = {"PYTHONPATH": str(REPO / "src"),
+           "PATH": "/usr/bin:/bin",
+           "HOME": "/tmp"}
     return subprocess.run(
-        cmd, capture_output=True, text=True, timeout=10,
-        env={"PYTHONPATH": str(REPO / "src"),
-             "PATH": "/usr/bin:/bin",
-             "HOME": "/tmp"},
+        cmd, capture_output=True, text=True, timeout=10, env=env,
     )
 
 
@@ -100,15 +100,17 @@ class TestInventory:
     def test_data_sinks_v0_6(self):
         """CONTRACT v0.6 §17.3: each instance has a data_sinks array.
 
-        Without SIGMOND_CLICKHOUSE_URL set, only file sinks appear.
+        Only `file` sinks are declared; ClickHouse is removed suite-wide
+        so it must never appear as a sink kind.
         """
         for inst in self.data["instances"]:
             sinks = inst["data_sinks"]
             assert isinstance(sinks, list) and sinks
             kinds = {s["kind"] for s in sinks}
             assert "file" in kinds
-            # CH sink is env-gated; tests run without CH so it's absent.
+            # ClickHouse is removed suite-wide; never a valid sink kind.
             assert "clickhouse" not in kinds
+            assert kinds <= {"file"}
             for sink in sinks:
                 for key in ("kind", "target", "retention_days", "mb_per_day"):
                     assert key in sink, f"sink missing {key}"

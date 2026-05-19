@@ -74,18 +74,12 @@ mode  = "0755"
 [systemd]
 templated_units = ["codar-sounder@.service"]
 
-# CONTRACT v0.6 §17 — local ClickHouse sink for `codar.spots`.  Schema
-# is greenfield (this repo).  When sigmond publishes
-# SIGMOND_CLICKHOUSE_URL into coordination.env, the daemon writes one
-# row per detected peak per CPI in parallel with the canonical JSONL
-# spool.  CH-disabled hosts stay file-only with no extra moving parts;
-# JSONL remains the canonical L1 artefact (Kaeppler-compatible Zenodo
-# schema), CH is the L2 staging tier hs-uploader will read from.
-[clickhouse]
-database         = "codar"
-schema_dir       = "clickhouse/schema/codar"
-schema_version   = 1
-required_min_ch  = "23.8"
+# CONTRACT v0.6 §17 — the daemon writes one row per detected peak per
+# CPI to the local HamSCI sink (SQLite store-and-forward queue under
+# sigmond's state dir) in parallel with the canonical JSONL spool,
+# when that sink is in play.  Hosts without it stay file-only with no
+# extra moving parts; JSONL remains the canonical L1 artefact
+# (Kaeppler-compatible Zenodo schema).
 
 # Wave 3 §15 channel contribution: declare the wide IQ channel(s) sigmond
 # should provision in radiod for codar-sounder.  Rendered into
