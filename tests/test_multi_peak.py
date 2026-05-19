@@ -228,7 +228,7 @@ class TestChRowBuilder:
             timestamp=ts, detection=detection, fix=fix,
             peak_index=0, peak_count=1,
         )
-        # All columns from clickhouse/schema/codar/001_create_spots.sql.
+        # All columns of the codar.spots HamSCI sink row.
         expected_cols = {
             "time", "host_call", "host_grid", "radiod_id", "instance",
             "processing_version", "station_id", "oblique_freq_hz",

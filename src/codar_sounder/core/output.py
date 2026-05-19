@@ -30,8 +30,8 @@ Atomic-ish writes: each record is written with a trailing newline and
 hosts with rotational disks) — at most one record can be lost on crash.
 
 This file remains the canonical L1 artefact.  The CONTRACT v0.6 §17
-ClickHouse sink (codar.spots) is *additive* — written from the daemon
-in parallel via :class:`sigmond.hamsci_ch.Writer`, never instead of.
+HamSCI sink (codar.spots) is *additive* — written from the daemon
+in parallel via :class:`sigmond.hamsci_sink.Writer`, never instead of.
 """
 
 from __future__ import annotations

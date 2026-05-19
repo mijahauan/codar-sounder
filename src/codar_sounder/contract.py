@@ -8,7 +8,7 @@ Contract layout (sigmond/docs/CLIENT-CONTRACT.md):
   §12  validate --json — config validation
   §14  configuration interview — config init/edit
   §15  radiod channel contributions ([[radiod.fragment]])
-  §17  output sinks — data_sinks array per instance (file/clickhouse)
+  §17  output sinks — data_sinks array per instance (file/sqlite)
 """
 
 from __future__ import annotations
@@ -38,6 +38,17 @@ def _client_version() -> str:
         return "0.1.0"
 
 
+def _sqlite_sink_available() -> bool:
+    """True when the local HamSCI SQLite sink is in play.
+
+    Mirrors `sigmond.hamsci_sink.Writer.from_env`: an explicit
+    `SIGMOND_SQLITE_PATH`, or the default sink file already on disk.
+    """
+    if (os.environ.get("SIGMOND_SQLITE_PATH") or "").strip():
+        return True
+    return Path("/var/lib/sigmond/sink.db").exists()
+
+
 def build_inventory(config: dict, config_path: Path) -> dict:
     """Build the inventory --json payload per contract v0.5 §3.
 
@@ -63,8 +74,8 @@ def build_inventory(config: dict, config_path: Path) -> dict:
 
             # CONTRACT v0.6 §17 — output sinks per instance.  JSONL
             # spool is the canonical L1 artefact (Kaeppler-compatible
-            # Zenodo schema); the CH sink is added when sigmond has
-            # published SIGMOND_CLICKHOUSE_URL into the env.
+            # Zenodo schema); the local HamSCI sink (SQLite store-and-
+            # forward queue) is added when it is in play.
             data_sinks: list[dict[str, Any]] = [
                 {
                     "kind":           "file",
@@ -74,9 +85,9 @@ def build_inventory(config: dict, config_path: Path) -> dict:
                     "mb_per_day":     5,
                 },
             ]
-            if os.environ.get("SIGMOND_CLICKHOUSE_URL", "").strip():
+            if _sqlite_sink_available():
                 data_sinks.append({
-                    "kind":           "clickhouse",
+                    "kind":           "sqlite",
                     "target":         "codar.spots",
                     "schema_ref":     "codar:1",
                     "retention_days": 90,

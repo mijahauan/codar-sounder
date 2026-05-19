@@ -20,12 +20,12 @@ CPI out across every configured ``[[radiod.transmitter]]``:
             IonosphericFix (virtual_height, fv, uncertainty, mode_layer)
                 ↓ JSONL: core.output.JsonlWriter (canonical L1 artefact,
                   Kaeppler-compatible Zenodo schema; one record per peak)
-                ↓ ClickHouse (CONTRACT v0.6 §17, additive when configured):
-                  sigmond.hamsci_ch.Writer → codar.spots, one row per peak
+                ↓ HamSCI sink (CONTRACT v0.6 §17, additive when configured):
+                  sigmond.hamsci_sink.Writer → codar.spots, one row per peak
 
 Per-CPI failures (no peak detected, low SNR, unphysical geometry on
-one of several peaks, CH unreachable) emit a warning and continue —
-never crash the service.  The CH path failing never blocks JSONL.
+one of several peaks, sink unreachable) emit a warning and continue —
+never crash the service.  The sink path failing never blocks JSONL.
 
 JSONL output layout:
     /var/lib/codar-sounder/<radiod>/<station>/<YYYY>/<MM>/<DD>.jsonl
@@ -128,10 +128,11 @@ class _TransmitterPipeline:
         self.range_max_km = range_max_km
         self.snr_threshold_db = snr_threshold_db
         self.max_peaks_per_cpi = max_peaks_per_cpi
-        # Optional second sink for CONTRACT v0.6 §17 — local CH staging
-        # tier.  When present, each per-peak record is also written to
-        # the codar.spots table.  None when CH isn't configured;
-        # set in SounderDaemon.__init__ from sigmond.hamsci_ch.Writer.
+        # Optional second sink for CONTRACT v0.6 §17 — local HamSCI
+        # sink (SQLite store-and-forward queue).  When present, each
+        # per-peak record is also written to the codar.spots table.
+        # None when the sink isn't configured; set in
+        # SounderDaemon.__init__ from sigmond.hamsci_sink.Writer.
         self.ch_writer = ch_writer
         self.host_call = host_call
         self.host_grid = host_grid
@@ -231,9 +232,10 @@ class _TransmitterPipeline:
                 peak_count=peak_count,
             )
 
-            # CONTRACT v0.6 §17 — additive write to local CH staging tier.
-            # JSONL above remains the canonical L1 artefact (Kaeppler-
-            # compatible Zenodo schema).  CH path failure is non-fatal.
+            # CONTRACT v0.6 §17 — additive write to the local HamSCI
+            # sink (SQLite store-and-forward queue).  JSONL above
+            # remains the canonical L1 artefact (Kaeppler-compatible
+            # Zenodo schema).  Sink path failure is non-fatal.
             if self.ch_writer is not None:
                 row = self._ch_row_for(
                     timestamp=ts, detection=detection, fix=fix,
@@ -243,7 +245,7 @@ class _TransmitterPipeline:
                     self.ch_writer.insert([row])
                 except Exception as exc:
                     log.warning(
-                        "[%s] CH insert failed for peak %d/%d: %s",
+                        "[%s] sink insert failed for peak %d/%d: %s",
                         self.station_id, peak_index, peak_count, exc,
                     )
 
@@ -262,11 +264,10 @@ class _TransmitterPipeline:
     def _ch_row_for(
         self, *, timestamp, detection, fix, peak_index: int, peak_count: int,
     ) -> dict:
-        """Build a row matching the codar.spots schema (clickhouse/schema/codar/001).
+        """Build a row for the codar.spots HamSCI sink table.
 
-        Field order matches the DDL column order.  Numeric fields keep
-        full precision (no rounding) — CH has the storage, the analytics
-        side benefits from the extra digits.
+        Numeric fields keep full precision (no rounding) — the
+        analytics side benefits from the extra digits.
         """
         return {
             "time":               timestamp,
@@ -365,27 +366,28 @@ class SounderDaemon:
         receiver_lon = float(self.station.get("receiver_lon", 0.0))
         output_dir = Path(self.paths.get("output_dir", "/var/lib/codar-sounder"))
 
-        # CONTRACT v0.6 §17 — local CH staging tier.  One Writer per
-        # daemon, shared across all transmitter pipelines (they all
-        # write to codar.spots).  Returns a no-op writer when
-        # SIGMOND_CLICKHOUSE_URL is unset, so this is safe in the
+        # CONTRACT v0.6 §17 — local HamSCI sink (SQLite store-and-
+        # forward queue).  One Writer per daemon, shared across all
+        # transmitter pipelines (they all write to codar.spots).
+        # Returns a no-op writer when no sink path is configured and
+        # /var/lib/sigmond isn't writable, so this is safe in the
         # standalone (no-sigmond) case too.  Module-not-found means
-        # sigmond.hamsci_ch isn't installed — log and stay file-only.
+        # sigmond.hamsci_sink isn't installed — log and stay file-only.
         self.ch_writer = None
         try:
-            from sigmond.hamsci_ch import Writer as _HamsciWriter  # type: ignore[import-not-found]
+            from sigmond.hamsci_sink import Writer as _HamsciWriter  # type: ignore[import-not-found]
             self.ch_writer = _HamsciWriter.from_env(
                 table="spots", mode="codar",
                 schema_version=1, batch_rows=200,
             )
             log.info(
-                "CH writer health=%s (database=%s)",
+                "sink writer health=%s (database=%s)",
                 self.ch_writer.health, self.ch_writer.database,
             )
         except ImportError:
-            log.debug("sigmond.hamsci_ch not available; CH path disabled")
+            log.debug("sigmond.hamsci_sink not available; sink path disabled")
         except Exception as exc:
-            log.warning("CH writer init failed (%s); JSONL path unaffected", exc)
+            log.warning("sink writer init failed (%s); JSONL path unaffected", exc)
 
         host_call = str(self.station.get("callsign", ""))
         host_grid = str(self.station.get("grid_square", ""))
@@ -502,7 +504,7 @@ class SounderDaemon:
             try:
                 self.ch_writer.close()
             except Exception as exc:
-                log.warning("CH writer close failed: %s", exc)
+                log.warning("sink writer close failed: %s", exc)
 
     def _processing_version_string(self) -> str:
         """Return ``<package_version>+<git_short>`` for the CH ``processing_version``."""
