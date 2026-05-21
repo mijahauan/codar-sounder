@@ -38,6 +38,7 @@ Schema (v0.5):
     sigma_phi_quadratic_rad          σ_φ from quadratic detrend (= sigma_phi_rad)
     sigma_phi_underfit_ratio         linear/quadratic ratio; >>1 → phase curvature
     dechirp_sweeps_rejected          sweeps zeroed by per-sweep MAD pre-filter (v0.6.1)
+    n_hops                           ionospheric hop count selected by invert() (v0.7)
 
   Scintillation fields are computed per-CPI per-peak from the
   pre-Doppler-FFT range-spectrum column at the peak's range bin — one
@@ -171,6 +172,7 @@ class JsonlWriter:
             "scintillation_outliers_rejected":
                 int(scintillation.n_outliers_rejected),
             "mode_doppler_hz": round(scintillation.mode_doppler_hz, 4),
+            "n_hops": int(fix.n_hops),
             # v0.6 diagnostics — full precision so the linear/quadratic
             # ratio is reproducible by downstream readers.
             "sigma_phi_linear_rad": float(scintillation.sigma_phi_linear_rad),

@@ -615,8 +615,87 @@ thresholds classify a typical quiet peak as "strong scintillation".
 
 211 tests pass (was 212 in v0.6.2; -1 net from dropping the
 saturated-construction-incompatible test point).  Live
-verification on bee1-rx888: TBD post-deploy — expect S4 severity
-distribution to shift from ~85% strong (v0.6.2) toward ~85% weak
-on quiet days, with event rate dropping from 94% toward the
-~5-15% range characteristic of typical multipath HF (rare genuine
-disturbances peeking through the new thresholds).
+verification on bee1-rx888: post-deploy data shows S4 100% weak,
+σ_φ ~62/19/19 weak/moderate/strong, event rate 38% (was 94% under
+v0.6.2) — events now driven by genuine σ_φ excursions above the
+HF intrinsic floor rather than baseline Rayleigh fading.
+
+
+## v0.7.0 — multi-hop inversion (2026-05-21)
+
+Closes the F2_extreme misclassification finding from the Kp
+correlation analysis.  Diagnostic
+(``tasks/analysis/2026-05-21_f2_extreme_multihop_diagnostic.md``)
+showed 100% of F2_extreme records have a clean 3-hop
+interpretation at typical F2 heights (mean h' = 263 km),
+confirming that the v0.5/0.6 1-hop-only inversion was
+systematically mislabelling multi-hop returns as F2_extreme at
+implausibly high altitudes.
+
+### Tasks
+
+- [x] ``core/invert.py``:
+      - Generalised ``virtual_height_km(P, D, n_hops=1)`` to the
+        multi-hop form ``h = sqrt(P²-D²) / (2N)``.
+      - Generalised ``virtual_height_uncertainty_km`` with the
+        ``N²`` denominator factor from differentiating the
+        multi-hop expression.
+      - ``equivalent_vertical_freq_mhz`` and ``takeoff_zenith_deg``
+        unchanged (both ``N``-invariant from geometry).
+      - New ``select_n_hops(P, D, max_hops=4)`` picks the most
+        plausible ``N``: keep ``N = 1`` when ``h_1 < 500 km``
+        (typical E/F1/F2); otherwise search ``N ≥ 2`` for the
+        smallest giving plausible F-region height; fall back to
+        ``N = 1`` if none qualify.
+      - ``IonosphericFix`` gains ``n_hops: int`` field.
+      - ``invert()`` auto-selects ``N`` (override via ``n_hops``
+        kwarg for tests / external disambiguation).
+- [x] Wire schema: ``n_hops`` added to JSONL records and
+      ``codar.spots`` sink rows.  Daemon log line shows ``2F``,
+      ``3F`` etc. next to ``mode_layer`` for at-a-glance visibility.
+- [x] ``scripts/multihop_diagnostic.py`` (new) — re-runnable
+      diagnostic that loads F2_extreme records, computes
+      ``h'_apparent`` under N = 1, 2, 3, 4 hops, and reports the
+      climatological fit.
+- [x] ``tasks/analysis/2026-05-21_f2_extreme_multihop_diagnostic.md``
+      — first-run report.
+- [x] Tests:
+      - ``TestVirtualHeightMultiHop`` (5 tests): N=1 matches
+        default; N=2/3 give expected divided heights; SEAB
+        diagnostic example reproduces the 3-hop interpretation;
+        invalid n_hops raises.
+      - ``TestVirtualHeightUncertaintyMultiHop`` (2 tests): N=1
+        matches default; uncertainty scales as 1/N at the same
+        h_1 geometry.
+      - ``TestSelectNHops`` (8 tests): typical F2/F1/E pick N=1;
+        SEAB diagnostic example picks N=2 or N=3 by hop magnitude;
+        fallback when no plausible interpretation; geometry
+        violation raises.
+      - ``TestInvertMultiHop`` (6 tests): auto-selection for
+        typical case = N=1; F2_extreme apparent → N=2 +
+        reclassified F2; explicit override; fv and takeoff
+        zenith N-invariant; uncertainty smaller for multi-hop.
+- [x] ``test_multi_peak.py``: ``expected_cols`` set extended with
+      ``n_hops``; integration test asserts the field is int ≥ 1.
+- [x] ``README.md`` v0.7.0 highlights with semantic-change caveat.
+- [x] ``pyproject.toml`` + ``deploy.toml`` — version 0.6.3 → 0.7.0.
+      ``contract_version`` stays 0.6 (no contract surface change).
+
+### Out of scope (deferred)
+
+- **Multi-hop disambiguation via SNR climatology** — when both N=2
+  and N=3 give plausible heights, the v0.7 selector prefers N=2
+  (smaller).  A SNR-based preference (3-hop returns are ~10-20 dB
+  weaker than 2-hop on the same path) would be physically
+  motivated but requires absolute-power calibration we don't have.
+- **Cross-CPI rolling-window scintillation** — original v0.5
+  deferred item; underfit_ratio from v0.6.0 reduces its urgency.
+
+### Verification status
+
+232 tests pass (was 211 in v0.6.3; +21 new for multi-hop coverage).
+24 pre-existing Kaeppler Zenodo-dataset skips unchanged.  Live
+verification on bee1-rx888: TBD post-deploy — expect
+mode_layer distribution to shift from ~37% F2 / 37% F2_extreme to
+~67% F2 / nearly 0% F2_extreme (the former being a sum of 1-hop
+and reclassified 2-hop and 3-hop returns).

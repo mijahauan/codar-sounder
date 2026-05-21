@@ -84,6 +84,29 @@ trace → invert → scintillation → JSONL+CH writer per CPI:
     fields are additive payload-schema evolution, not contract-shape
     change.
 
+**v0.7.0 — multi-hop inversion:**
+
+  * ``invert()`` now selects the most plausible hop count
+    ``N ∈ {1, 2, 3, 4}`` from the geometry (was: always assumed
+    ``N = 1``).  Driven by the diagnostic finding that 100% of
+    apparent-F2_extreme records on bee1-rx888 SEAB have a clean
+    3-hop interpretation at typical F2 heights (median h' = 263 km),
+    far more likely than persistent F2_extreme at 35% rate.
+  * Selection rule: if ``h_1 < 500 km`` (typical E/F1/F2 returns)
+    keep ``N = 1`` for backward compatibility.  Otherwise search
+    ``N ≥ 2`` for the smallest hop count giving ``h_N`` in the
+    F-region band [150, 500] km; fall back to ``N = 1`` if none
+    qualify.
+  * New wire field ``n_hops`` per record.  ``virtual_height_km``
+    and ``mode_layer`` now reflect the ``N``-corrected
+    interpretation — semantic change from v0.6.x.  Archived
+    records before v0.7 keep 1-hop conventions; downstream
+    consumers should consult ``processing_version`` to know which
+    epoch produced each record.
+  * The equivalent vertical frequency and takeoff zenith angle are
+    geometrically ``N``-invariant — no semantic change to those
+    fields.
+
 **v0.6.3 — S4 thresholds Kp-calibrated:**
 
   * v0.6.2 fixed σ_φ but left S4 at ITU-R canonical 0.3/0.6.  Live

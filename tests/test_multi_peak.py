@@ -262,6 +262,8 @@ class TestChRowBuilder:
             "sigma_phi_underfit_ratio",
             # v0.6.1: per-sweep MAD pre-filter rejection count.
             "dechirp_sweeps_rejected",
+            # v0.7: multi-hop selector output.
+            "n_hops",
         }
         assert set(row.keys()) == expected_cols
         assert row["host_call"] == "AC0G"
@@ -288,6 +290,12 @@ class TestChRowBuilder:
         assert row["sigma_phi_quadratic_rad"] == 0.05
         assert row["sigma_phi_underfit_ratio"] == 1.4
         assert row["dechirp_sweeps_rejected"] == 2
+        # v0.7 multi-hop selector.  The test geometry uses 520 km
+        # group_range from a 1416 km path — geometrically impossible
+        # 1-hop, but invert() will still report SOMETHING; here we
+        # just verify the field is present.
+        assert isinstance(row["n_hops"], int)
+        assert row["n_hops"] >= 1
 
 
 # ── pipeline writes both JSONL and CH ────────────────────────────────────────

@@ -298,10 +298,11 @@ class _TransmitterPipeline:
                     )
 
             log.info(
-                "[%s] peak %d/%d %s P=%.0f km h'=%.0f±%.0f km "
+                "[%s] peak %d/%d %s(%dF) P=%.0f km h'=%.0f±%.0f km "
                 "fv=%.3f±%.3f MHz SNR=%.1f dB "
                 "S4=%.2f(%s) σ_φ=%.2f(%s) n=%d-%d%s",
                 self.station_id, peak_index, peak_count, fix.mode_layer,
+                fix.n_hops,
                 fix.group_range_km, fix.virtual_height_km,
                 fix.virtual_height_uncertainty_km,
                 fix.equivalent_vertical_freq_mhz,
@@ -350,6 +351,10 @@ class _TransmitterPipeline:
             "equivalent_vertical_freq_uncertainty_mhz":
                 float(fix.equivalent_vertical_freq_uncertainty_mhz),
             "takeoff_zenith_deg": float(fix.takeoff_zenith_deg),
+            # Ionospheric hop count chosen by invert()'s multi-hop
+            # selector (v0.7).  Same CPI may produce records with
+            # different n_hops if peaks land at different group ranges.
+            "n_hops":             int(fix.n_hops),
             # ITU-R P.531 scintillation (additive v0.5; see
             # codar_sounder.core.scintillation).
             "s4_index":           float(scintillation.s4_index),
