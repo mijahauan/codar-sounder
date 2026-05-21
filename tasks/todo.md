@@ -561,7 +561,62 @@ sits around 1.2-1.5 rad even on the quietest geomagnetic days.
 212 tests pass (was 214 in v0.6.1; -2 net because the e2e tests
 shrank from 6 parametrize cases to 4 unwrap-safe ones, while the
 helper boundary tests gained equivalent coverage).  Live
-verification on bee1-rx888: TBD post-deploy — expect σ_φ_severity
-distribution to shift from ~85% strong (v0.6.1) toward ~50/50
-weak/moderate on quiet days, with "strong" reserved for genuine
-events.
+verification on bee1-rx888: σ_φ_severity flipped 100% to weak
+(was ~85% strong under v0.6.1); event rate STILL 94% because S4
+was now driving events alone — leading immediately to v0.6.3.
+
+
+## v0.6.3 — S4 thresholds Kp-calibrated (2026-05-21)
+
+Same Kp-correlation finding applied to S4: at HF oblique with
+multipath the signal Rayleigh-fades and produces S4 ≈ 0.7-1.0 by
+construction.  Quiet-day distribution (May 21, Kp 1.0-3.0, 11,577
+records): median S4 = 0.78, p90 = 1.05 — ITU-R's 0.3/0.6
+thresholds classify a typical quiet peak as "strong scintillation".
+
+### Tasks
+
+- [x] ``core/scintillation.py``: bump ``S4_WEAK_MAX`` 0.3 → 1.0,
+      ``S4_MODERATE_MAX`` 0.6 → 1.5, ``S4_EVENT_THRESHOLD`` 0.3 →
+      1.0.  Update module docstring with the calibration history
+      table covering both indices.  Update README v0.6.3 highlights.
+- [x] Tests:
+      - ``TestS4SeverityHelper``: replace literal probe value 0.9
+        ("strong" under ITU-R) → 2.0 (still "strong" under v0.6.3).
+      - ``TestS4SeverityEndToEnd``: replace ``_BOUNDARY_TOL``
+        parametrization with well-within-bin probe values.  The
+        saturated-branch construction of
+        ``_amplitudes_with_target_s4`` has integer-rounding error
+        from ``n_high = round(n/(1+S4²))`` that makes boundary-
+        adjacent tests fragile; helper tests cover exact
+        boundaries.
+      - ``_amplitudes_with_target_s4``: extend to support
+        target_s4 > 1.0 via a two-level (high/zero) construction
+        with ``n_high : n_low = 1 : target_s4²``.
+      - ``test_event_when_s4_above_threshold``: rewrite with target
+        s4 = 1.2 (safely above 1.0 event threshold).  Add explicit
+        ``s4_index >= S4_EVENT_THRESHOLD`` assertion before the
+        event assertion.
+- [x] ``pyproject.toml`` + ``deploy.toml`` — version 0.6.2 → 0.6.3.
+      ``contract_version`` stays 0.6 (no contract surface change).
+
+### Out of scope (still / again)
+
+- **F2_extreme misclassification investigation** — separate work;
+  needs an analytical probe to test multi-hop interpretation of
+  long-group-range peaks.  Now the most pressing followup since
+  σ_φ + S4 are both calibrated.
+- **Storm-day final calibration** — both σ_φ and S4 thresholds
+  remain provisional until a Kp ≥ 5 event with v0.5+ logging.
+  Re-running ``kp_correlation_analysis.py`` post-storm will
+  refresh.
+
+### Verification status
+
+211 tests pass (was 212 in v0.6.2; -1 net from dropping the
+saturated-construction-incompatible test point).  Live
+verification on bee1-rx888: TBD post-deploy — expect S4 severity
+distribution to shift from ~85% strong (v0.6.2) toward ~85% weak
+on quiet days, with event rate dropping from 94% toward the
+~5-15% range characteristic of typical multipath HF (rare genuine
+disturbances peeking through the new thresholds).

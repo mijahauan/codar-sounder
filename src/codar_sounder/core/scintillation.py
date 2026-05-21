@@ -24,39 +24,53 @@ remains is the scintillation fluctuation).
 
 Severity bins (strict-less-than):
 
-    S4   < 0.3 → weak     | σ_φ < 1.5 → weak    (v0.6.2: Kp-calibrated)
-    S4   < 0.6 → moderate | σ_φ < 2.0 → moderate
-    S4   ≥ 0.6 → strong   | σ_φ ≥ 2.0 → strong
+    S4   < 1.0 → weak     | σ_φ < 1.5 → weak    (v0.6.3: both HF-cal)
+    S4   < 1.5 → moderate | σ_φ < 2.0 → moderate
+    S4   ≥ 1.5 → strong   | σ_φ ≥ 2.0 → strong
 
-A "scintillation event" is declared when ``S4 ≥ 0.3 or σ_φ ≥ 1.5``.
+A "scintillation event" is declared when ``S4 ≥ 1.0 or σ_φ ≥ 1.5``.
 
-S4 thresholds are ITU-R P.531 canonical.  σ_φ thresholds depart from
-ITU-R's 0.2 / 0.5 values because those were calibrated for
-narrowband single-mode signals (GNSS, SHF satellite) where the
-*intrinsic* phase incoherence floor is much lower than HF oblique.
+Both S4 and σ_φ thresholds depart from ITU-R P.531 canonical
+(S4: 0.3 / 0.6; σ_φ: 0.2 / 0.5) because those values were
+calibrated for narrowband single-mode signals (GNSS, SHF
+satellite) where the *intrinsic* multipath floor is much lower
+than HF oblique.  Cross-comparisons to GNSS scintillation
+literature should treat the codar-sounder values as
+HF-recalibrated; absolute numbers (the float ``s4_index`` and
+``sigma_phi_rad`` fields) remain comparable to other HF
+multipath sounders but NOT to GNSS at face value.
 
 Calibration history
 -------------------
-The σ_φ thresholds were tightened twice during 2026-05-21
-live verification on bee1-rx888 SEAB (13.45 MHz, 1416 km):
+The thresholds were tightened during 2026-05-21 live verification on
+bee1-rx888 SEAB (13.45 MHz, 1416 km):
 
-  v0.5.0 (initial)      ITU-R: weak < 0.2 / mod < 0.5
-  v0.5.2 (HF empirical) HF:    weak < 0.5 / mod < 1.0
-  v0.6.2 (Kp-validated) HF:    weak < 1.5 / mod < 2.0
+  v0.5.0 (initial)        ITU-R: S4 0.3/0.6  σ_φ 0.2/0.5
+  v0.5.2 (HF empirical)   HF:    S4 0.3/0.6  σ_φ 0.5/1.0
+  v0.6.2 (Kp-validated)   HF:    S4 0.3/0.6  σ_φ 1.5/2.0
+  v0.6.3 (both Kp-cal)    HF:    S4 1.0/1.5  σ_φ 1.5/2.0
 
-The v0.5.2 thresholds were calibrated from a 4-peak probe snapshot.
-The v0.6.2 thresholds are calibrated from a 12-hour multi-Kp-bucket
-correlation analysis (``tasks/analysis/2026-05-21_kp_correlation.md``)
-showing that at Kp = 1.00 (very geomagnetically quiet) σ_φ still
-averages ≈ 1.27 rad with 77% of peaks classifying as "strong" under
-v0.5.2 — proving that the v0.5.2 thresholds were still well below
-the HF intrinsic phase-incoherence floor at this path.  The new
-thresholds aim for ~50% "weak" at typical quiet-day σ_φ ≈ 1.3 rad,
-with "strong" reserved for σ_φ ≥ 2.0 rad (likely real events).
+v0.6.2 fixed σ_φ but left S4 ITU-R-canonical — live data
+immediately showed scintillation_event rate still 94% because S4
+was now alone driving the events.  Quiet-day S4 distribution on
+2026-05-21 (Kp 1.0-3.0; 11,577 records):
 
-Final calibration awaits a Kp ≥ 5 storm with v0.5+ logging enabled;
-expect another nudge if storm-day σ_φ statistics suggest the bins
-need further widening.
+  p10  = 0.56     # HF Rayleigh-fading baseline
+  p50  = 0.78     # median peak on a quiet day
+  p90  = 1.05
+  p95  = 1.30
+
+The median peak's S4 = 0.78 sits well above ITU-R's "strong"
+threshold (0.6) on a quiet day — same story as σ_φ.  At HF oblique
+with multipath, the signal Rayleigh-fades and produces S4 ≈ 0.7-1.0
+by construction with no real scintillation.  v0.6.3 thresholds
+treat the p90 of quiet-day data (~1.0) as the weak/moderate
+boundary, and reserve "strong" for ≥ 1.5 — well above any quiet-
+day observation.
+
+Final calibration awaits a Kp ≥ 5 storm with v0.5+ logging.
+Expect another nudge if storm-day statistics suggest further
+adjustment.
 
 Cadence caveat
 --------------
@@ -130,9 +144,12 @@ from typing import Optional
 import numpy as np
 
 
-# S4 severity-bin boundaries — ITU-R P.531 canonical (strict less-than).
-S4_WEAK_MAX = 0.3
-S4_MODERATE_MAX = 0.6
+# S4 severity-bin boundaries — HF-recalibrated (v0.6.3; see module
+# docstring).  ITU-R single-mode thresholds (0.3 / 0.6) misclassify
+# the HF Rayleigh-fading baseline as "strong" by construction —
+# median quiet-day S4 at SEAB / 13.45 MHz / 1416 km is 0.78.
+S4_WEAK_MAX = 1.0
+S4_MODERATE_MAX = 1.5
 
 # σ_φ severity-bin boundaries — Kp-validated (v0.6.2; see module
 # docstring).  Calibrated from the 2026-05-21 Kp-correlation analysis
@@ -142,10 +159,10 @@ S4_MODERATE_MAX = 0.6
 SIGMA_PHI_WEAK_MAX = 1.5
 SIGMA_PHI_MODERATE_MAX = 2.0
 
-# "Event" gate: matches the lower bound of the moderate bin in either
-# index — a clean, monitoring-actionable threshold.  S4 ≥ 0.3 OR
-# σ_φ ≥ 1.5 (the Kp-validated weak/moderate boundary).
-S4_EVENT_THRESHOLD = 0.3
+# "Event" gate: matches the lower bound of the moderate bin in
+# either index — a clean, monitoring-actionable threshold.  Both
+# thresholds are now HF-calibrated (S4 ≥ 1.0 OR σ_φ ≥ 1.5).
+S4_EVENT_THRESHOLD = 1.0
 SIGMA_PHI_EVENT_THRESHOLD = 1.5
 
 # Default hard floor on slow-time samples.  60 samples (the codar-sounder

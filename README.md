@@ -84,6 +84,22 @@ trace → invert → scintillation → JSONL+CH writer per CPI:
     fields are additive payload-schema evolution, not contract-shape
     change.
 
+**v0.6.3 — S4 thresholds Kp-calibrated:**
+
+  * v0.6.2 fixed σ_φ but left S4 at ITU-R canonical 0.3/0.6.  Live
+    data immediately showed event rate stuck at 94% because S4 was
+    now alone driving events: at HF oblique with multipath, the
+    signal Rayleigh-fades, producing S4 ≈ 0.7–1.0 by construction
+    with no real scintillation.
+  * Quiet-day S4 distribution on May 21 (Kp 1.0–3.0; 11,577
+    records): p10=0.56, p50=0.78, p90=1.05, p95=1.30.
+  * New thresholds: weak < 1.0 / moderate < 1.5 / strong ≥ 1.5.
+    Event gate at S4 ≥ 1.0.  Mirror of the σ_φ recalibration in
+    v0.6.2.
+  * Both indices now in the same HF-recalibrated frame; absolute
+    values remain comparable to other HF multipath sounders but
+    NOT directly to GNSS scintillation literature.
+
 **v0.6.2 — σ_φ thresholds Kp-calibrated:**
 
   * Severity bins re-tuned from a 60-bucket Kp-correlation analysis

@@ -88,19 +88,30 @@ def _amplitudes_with_target_s4(
 ) -> np.ndarray:
     """Construct amplitudes whose intensity has S4 = target_s4 exactly.
 
-    S4 = std(I) / mean(I).  Build I as ``mean + delta·(±1, ±1, ...)``
-    with equal counts of +1/-1 so mean is exactly ``mean`` and
-    std = ``delta`` = ``target_s4·mean``.  Returns ``sqrt(I)``.
+    Two construction strategies depending on the target:
+
+    * **target_s4 ≤ 1.0**: bipolar around the mean — intensity =
+      ``mean + delta·(+1, -1, +1, -1, ...)`` with delta = target_s4·mean.
+      Yields S4 = delta/mean exactly, mean(I) = mean exactly.
+      Constraint: delta ≤ mean (otherwise intensity goes negative).
+    * **target_s4 > 1.0** (saturated scintillation): two-level
+      distribution with n_high large samples and n_low zeros.  Pick
+      n_high : n_low = 1 : target_s4² so var/mean² = n_low/n_high =
+      target_s4² exactly.  Slight rounding error from forcing
+      n_high to be integer (negligible at n = 60).
     """
     if n % 2:
-        raise ValueError("n must be even for the alternating construction")
-    delta = target_s4 * mean
-    if delta > mean:
-        raise ValueError(
-            f"target_s4 too large for unit mean: delta={delta} > mean={mean}"
-        )
-    signs = np.tile([+1.0, -1.0], n // 2)
-    intensity = mean + delta * signs
+        raise ValueError("n must be even for the bipolar construction")
+    if target_s4 <= 1.0:
+        delta = target_s4 * mean
+        signs = np.tile([+1.0, -1.0], n // 2)
+        intensity = mean + delta * signs
+        return np.sqrt(intensity)
+    # Saturated branch.
+    n_high = max(1, int(round(n / (1.0 + target_s4 ** 2))))
+    intensity = np.zeros(n, dtype=np.float64)
+    # mean = (n_high·a + n_low·0) / n = mean → a = mean·n/n_high.
+    intensity[:n_high] = mean * n / n_high
     return np.sqrt(intensity)
 
 
@@ -210,11 +221,10 @@ class TestS4SeverityHelper:
     @pytest.mark.parametrize("s4,expected", [
         (0.0,                    "weak"),
         (S4_WEAK_MAX - 1e-12,    "weak"),
-        (S4_WEAK_MAX,            "moderate"),     # strict <, so 0.3 → moderate
+        (S4_WEAK_MAX,            "moderate"),     # v0.6.3: 1.0 → moderate
         (S4_MODERATE_MAX - 1e-12, "moderate"),
-        (S4_MODERATE_MAX,        "strong"),       # 0.6 → strong
-        (0.9,                    "strong"),
-        (1.5,                    "strong"),       # saturated
+        (S4_MODERATE_MAX,        "strong"),       # v0.6.3: 1.5 → strong
+        (2.0,                    "strong"),       # saturated
     ])
     def test_boundary(self, s4, expected):
         assert _s4_severity(s4) == expected
@@ -235,18 +245,29 @@ class TestSigmaPhiSeverityHelper:
 
 class TestS4SeverityEndToEnd:
     """Validate the severity assignment lands consistently when run
-    through the full ``compute_scintillation`` path.  Targets are
-    placed `_BOUNDARY_TOL` (1e-4) away from each boundary so the
-    measured S4 stays on the intended side after complex64 round-trip
-    + detrending residuals."""
+    through the full ``compute_scintillation`` path.
+
+    Test points are kept well inside each bin (not at boundaries):
+    the saturated-branch construction's integer-rounding of n_high
+    introduces small S4 errors (~±0.03) that make boundary-adjacent
+    tests fragile.  Helper tests above cover boundary assignment at
+    exact float64 values where construction error is irrelevant.
+    """
 
     @pytest.mark.parametrize("target_s4,expected", [
-        (0.05,                        "weak"),
-        (S4_WEAK_MAX - _BOUNDARY_TOL, "weak"),
-        (S4_WEAK_MAX + _BOUNDARY_TOL, "moderate"),
-        (S4_MODERATE_MAX - _BOUNDARY_TOL, "moderate"),
-        (S4_MODERATE_MAX + _BOUNDARY_TOL, "strong"),
-        (0.9,                         "strong"),
+        (0.05, "weak"),
+        (0.50, "weak"),
+        (0.95, "weak"),       # well within v0.6.3 weak bin (< 1.0)
+        (1.20, "moderate"),
+        (1.40, "moderate"),   # well within moderate bin (1.0–1.5)
+        (1.80, "strong"),     # max saturated target the v0.5.1 MAD
+                              # rejection tolerates — at target ≥ ~2.0
+                              # the sparse construction has so many
+                              # zeros that the per-peak MAD rejects
+                              # the high-amplitude samples as outliers
+                              # and returns "unknown".  Boundary
+                              # assignment at exact float64 values is
+                              # covered by TestS4SeverityHelper above.
     ])
     def test_e2e(self, target_s4, expected):
         amp = _amplitudes_with_target_s4(target_s4)
@@ -300,12 +321,14 @@ class TestScintillationEvent:
         r = compute_scintillation(z, sample_rate_hz=SRF_HZ)
         assert r.scintillation_event is False
 
-    def test_event_when_s4_at_threshold(self):
-        # Just above threshold so complex64 + detrending residual
-        # doesn't push us under it.
-        amp = _amplitudes_with_target_s4(S4_EVENT_THRESHOLD + _BOUNDARY_TOL)
+    def test_event_when_s4_above_threshold(self):
+        # Target safely above the event threshold (v0.6.3: S4 ≥ 1.0).
+        # Saturated-branch construction has small integer-rounding
+        # error (~±0.03), so a comfortable margin avoids fragility.
+        amp = _amplitudes_with_target_s4(1.2)
         z = _complex_from(amp, np.zeros_like(amp))
         r = compute_scintillation(z, sample_rate_hz=SRF_HZ)
+        assert r.s4_index >= S4_EVENT_THRESHOLD
         assert r.scintillation_event is True
 
     def test_event_when_sigma_phi_at_threshold(self):

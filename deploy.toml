@@ -1,6 +1,6 @@
 [package]
 name             = "codar-sounder"
-version          = "0.6.2"
+version          = "0.6.3"
 contract_version = "0.6"
 license          = "MIT"
 
