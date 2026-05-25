@@ -218,3 +218,26 @@ the open Kp ≥ 5 storm-day follow-up.
   propagation), and the data product schema.
 - README — installation, status, scientific context, calibration
   follow-up plan.
+
+## Per-instance cutover (Phase 5 of sigmond multi-instance architecture)
+
+The systemd unit (`codar-sounder@%i.service`) now passes
+`--instance %i` to the daemon (alongside the existing `--radiod-id %i`).
+`config.resolve_config_path()` prefers `/etc/codar-sounder/<instance>.toml`
+when it exists; otherwise falls back to the legacy shared
+`codar-sounder-config.toml` with a one-line `DeprecationWarning`.
+
+Until operators run `sudo smd instance migrate` (sigmond Phase 8),
+the per-instance config doesn't exist and existing deployments
+keep running unchanged.  After migration, the per-instance config
+holds an `[instance]` block with `reporter_id = "AC0G-CODAR"` (or
+similar reporter-keyed name); the daemon stops emitting the
+deprecation warning.
+
+Spot rows now carry a first-class `reporter_id` field — derived
+from the per-instance config's `[instance]` block when present,
+falling back to `radiod_id` (matching the existing `instance`
+field's semantic) for legacy single-instance deployments.
+
+See `/opt/git/sigmond/sigmond/docs/MULTI-INSTANCE-ARCHITECTURE.md`
+for the architecture and phase plan.

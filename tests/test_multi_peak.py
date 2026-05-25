@@ -242,6 +242,7 @@ class TestChRowBuilder:
         # All columns of the codar.spots HamSCI sink row (v0.5).
         expected_cols = {
             "time", "host_call", "host_grid", "radiod_id", "instance",
+            "reporter_id",   # Phase-5 (sigmond MULTI-INSTANCE-ARCHITECTURE.md §3)
             "processing_version", "station_id", "oblique_freq_hz",
             "sweep_rate_hz_per_s", "coherent_seconds",
             "peak_index", "peak_count", "mode_layer", "snr_db",
@@ -270,6 +271,9 @@ class TestChRowBuilder:
         assert row["host_grid"] == "EM38ww"
         assert row["radiod_id"] == "bee1-rx888"
         assert row["instance"] == "bee1-rx888"
+        # reporter_id falls back to radiod_id when no [instance] block
+        # is set on the per-instance config (legacy single-instance world).
+        assert row["reporter_id"] == "bee1-rx888"
         assert row["station_id"] == "DUCK"
         assert row["mode_layer"] == fix.mode_layer
         assert row["peak_index"] == 0

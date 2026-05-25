@@ -23,8 +23,16 @@ ExecStartPre=+/bin/mkdir -p /var/log/codar-sounder
 ExecStartPre=+/usr/bin/chown -R codarsnd:codarsnd /var/lib/codar-sounder/%i
 ExecStartPre=+/usr/bin/chown -R codarsnd:codarsnd /var/log/codar-sounder
 
+# Phase-5 cutover (sigmond MULTI-INSTANCE-ARCHITECTURE.md):
+# --instance %i picks up /etc/codar-sounder/%i.toml when the operator
+# has run `sudo smd instance migrate` (Phase 8).  Until then the
+# per-instance config doesn't exist and the daemon falls back to the
+# legacy /etc/codar-sounder/codar-sounder-config.toml with a one-line
+# deprecation warning.  --radiod-id %i stays for the legacy fallback
+# path; --config is intentionally omitted (explicit_path wins in
+# resolve_config_path, which would force the legacy path forever).
 ExecStart=/opt/codar-sounder/venv/bin/python3 -m codar_sounder.cli daemon \
-    --config /etc/codar-sounder/codar-sounder-config.toml \
+    --instance %i \
     --radiod-id %i
 
 TimeoutStartSec=60

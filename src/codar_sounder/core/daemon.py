@@ -110,6 +110,7 @@ class _TransmitterPipeline:
         host_call: str = "",
         host_grid: str = "",
         processing_version: str = "",
+        reporter_id: Optional[str] = None,
     ):
         self.station_id = tx_config["id"]
         self.tx_config = tx_config
@@ -146,6 +147,10 @@ class _TransmitterPipeline:
         self.host_call = host_call
         self.host_grid = host_grid
         self.processing_version = processing_version
+        # Phase-5 (sigmond MULTI-INSTANCE-ARCHITECTURE.md §3): per-
+        # instance reporter ID for spot tagging.  None on legacy
+        # single-instance hosts; _build_record falls back to radiod_id.
+        self.reporter_id = reporter_id
 
         self.clutter_mask = GroundClutterMask(window=clutter_window)
         self.writer = JsonlWriter(
@@ -331,7 +336,8 @@ class _TransmitterPipeline:
             "host_call":          self.host_call,
             "host_grid":          self.host_grid,
             "radiod_id":          self.radiod_id,
-            "instance":           self.radiod_id,
+            "instance":           self.radiod_id,  # legacy; removed Phase 9
+            "reporter_id":        self.reporter_id or self.radiod_id,
             "processing_version": self.processing_version,
             "station_id":         self.station_id,
             "oblique_freq_hz":    int(self.center_freq_hz),
@@ -407,7 +413,13 @@ class SounderDaemon:
         otherwise (with a loud log warning).
     """
 
-    def __init__(self, config: dict, radiod_block: dict):
+    def __init__(
+        self,
+        config: dict,
+        radiod_block: dict,
+        *,
+        reporter_id: Optional[str] = None,
+    ):
         self.config = config
         self.radiod = radiod_block
         self.station = config.get("station", {})
@@ -416,6 +428,10 @@ class SounderDaemon:
         self._stopped = threading.Event()
 
         self.radiod_id = radiod_block.get("id", "default")
+        # Phase-5 (sigmond MULTI-INSTANCE-ARCHITECTURE.md §3): per-
+        # instance reporter ID.  None on legacy single-instance hosts;
+        # _TransmitterPipeline._build_record() falls back to radiod_id.
+        self.reporter_id = reporter_id
         self.channel_name = radiod_block.get("channel_name", "codar")
         self.status_dns = radiod_block.get("status_dns", "")
 
@@ -500,6 +516,7 @@ class SounderDaemon:
                 host_call=host_call,
                 host_grid=host_grid,
                 processing_version=proc_version,
+                reporter_id=self.reporter_id,
             ))
 
         # Pick the dominant sweep rate / SRF for the synthetic fallback

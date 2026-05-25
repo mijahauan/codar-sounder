@@ -83,6 +83,11 @@ def main():
     _common(p_ver)
 
     p_dae = sub.add_parser("daemon", help="Run sounder daemon")
+    p_dae.add_argument("--instance", default=None,
+                       help="Reporter-ID instance (loads /etc/codar-sounder/"
+                            "<instance>.toml when present; falls back to "
+                            "shared config otherwise). See sigmond's "
+                            "MULTI-INSTANCE-ARCHITECTURE.md §6.")
     p_dae.add_argument("--radiod-id", default=None,
                        help="ID of the [[radiod]] block to use")
     _common(p_dae)
@@ -214,18 +219,37 @@ def _handle_version(args):
 
 def _handle_daemon(args):
     _install_sighup_handler()
-    from codar_sounder.config import load_config, resolve_radiod_block
+    from codar_sounder.config import (
+        extract_reporter_id, load_config, resolve_config_path,
+        resolve_radiod_block,
+    )
     from codar_sounder.core.daemon import SounderDaemon
 
-    config_path = _resolved_config_path(args)
+    # Phase-5 cutover (sigmond MULTI-INSTANCE-ARCHITECTURE.md §4):
+    # prefer per-instance config when --instance is given and the file
+    # exists; fall back to legacy shared config with DeprecationWarning.
+    instance = getattr(args, "instance", None)
+    config_path = resolve_config_path(
+        instance=instance,
+        explicit_path=args.config,
+    )
     config = load_config(config_path)
     block = resolve_radiod_block(config, args.radiod_id)
 
-    log = logging.getLogger("codar_sounder.daemon")
-    log.info("starting codar-sounder daemon for radiod %s (config=%s)",
-             block.get("id", "default"), config_path)
+    # Per-instance reporter_id from [instance] block; None during the
+    # cutover (legacy shared config has no such block).  Row-construction
+    # layer falls back to radiod_id when reporter_id is None.
+    reporter_id = extract_reporter_id(config_path)
 
-    daemon = SounderDaemon(config, block)
+    log = logging.getLogger("codar_sounder.daemon")
+    log.info(
+        "starting codar-sounder daemon for radiod %s "
+        "(config=%s, reporter_id=%s)",
+        block.get("id", "default"), config_path,
+        reporter_id or "<derived from radiod_id at row time>",
+    )
+
+    daemon = SounderDaemon(config, block, reporter_id=reporter_id)
     daemon.run()
 
 
