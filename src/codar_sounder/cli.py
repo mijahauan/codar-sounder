@@ -70,11 +70,11 @@ def main():
         p.add_argument("--log-level", default=None,
                        help="Override log level (DEBUG/INFO/WARNING/ERROR)")
 
-    p_inv = sub.add_parser("inventory", help="Contract v0.5 §3 inventory")
+    p_inv = sub.add_parser("inventory", help="Contract v0.7 §3 inventory")
     p_inv.add_argument("--json", action="store_true", default=True)
     _common(p_inv)
 
-    p_val = sub.add_parser("validate", help="Contract v0.5 §12 validation")
+    p_val = sub.add_parser("validate", help="Contract v0.7 §12 validation")
     p_val.add_argument("--json", action="store_true", default=True)
     _common(p_val)
 
