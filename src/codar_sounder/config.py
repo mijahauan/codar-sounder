@@ -118,10 +118,10 @@ def radiod_blocks(config: dict) -> list[dict]:
 def resolve_radiod_block(config: dict, radiod_id: str | None) -> dict:
     """Pick the [[radiod]] block matching radiod_id.
 
-    Match precedence (RADIOD-IDENTIFICATION.md §3.1 + §6):
-      1. New canonical: ``block["status"]`` (the mDNS multicast name)
-      2. Legacy fallback: ``block["id"]`` (operator's local label),
-         emits DeprecationWarning.
+    Phase 6 cutover (RADIOD-IDENTIFICATION.md §3.1): the mDNS
+    multicast status name is the only identifier.  Operators with
+    legacy `id`/`status_dns` configs must run
+    ``sudo smd radiod migrate --yes``.
 
     If radiod_id is None, returns the first block (single-radiod hosts).
     Raises ValueError if no match.
@@ -131,25 +131,12 @@ def resolve_radiod_block(config: dict, radiod_id: str | None) -> dict:
         raise ValueError("config has no [[radiod]] blocks")
     if radiod_id is None:
         return blocks[0]
-    # New canonical: match on `status`.
     for block in blocks:
         if block.get("status") == radiod_id:
             return block
-    # Legacy fallback: match on `id`.
-    for block in blocks:
-        if block.get("id") == radiod_id:
-            warnings.warn(
-                f"[[radiod]] block matched on legacy `id` field "
-                f"({radiod_id!r}); rename to `status` per "
-                "RADIOD-IDENTIFICATION.md §3.1",
-                DeprecationWarning, stacklevel=2,
-            )
-            return block
-    have = ", ".join(
-        b.get("status") or b.get("id", "<unnamed>") for b in blocks
-    )
+    have = ", ".join(b.get("status", "<unnamed>") for b in blocks)
     raise ValueError(
-        f"no [[radiod]] block with status or id={radiod_id!r}; have: {have}"
+        f"no [[radiod]] block with status={radiod_id!r}; have: {have}"
     )
 
 

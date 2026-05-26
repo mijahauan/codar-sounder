@@ -35,13 +35,6 @@ log_dir      = "/var/log/codar-sounder"
 # placeholder unchanged to make the daemon refuse to start until
 # the operator runs the configurator.
 status = "<configure-via-config-init>"
-
-# Legacy fields below are accepted during the Phase 3 deprecation
-# window (RADIOD-IDENTIFICATION.md §6).  Greenfield installs should
-# leave them out; existing deployments can keep them until the
-# operator runs the configurator to migrate to the `status` field.
-# id         = "bee1-rx888"
-# status_dns = "bee1-status.local"
 channel_name = "codar-4mhz"
 
 # One [[radiod.transmitter]] per CODAR transmitter audible from this
@@ -69,8 +62,7 @@ tx_lon_deg          = -75.750133
 # A second radiod (e.g. a north-pointing antenna) gets its own block:
 #
 # [[radiod]]
-# id           = "bee3-rx888"
-# status_dns   = "bee3-status.local"
+# status       = "bee3-status.local"
 # channel_name = "codar-4mhz"
 # [[radiod.transmitter]]
 # id           = "MVCO"

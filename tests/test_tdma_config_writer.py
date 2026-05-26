@@ -37,8 +37,7 @@ SIMPLE_CONFIG = _config("""
     receiver_lon = -75.93
 
     [[radiod]]
-    id = "bee1-rx888"
-    status_dns = "bee1.local"
+    status = "bee1-status.local"
     channel_name = "codar-4mhz"
     sample_rate_hz = 64000
 
@@ -71,7 +70,7 @@ class TestRewrite:
     def test_replaces_existing_tdma_line(self):
         out_lines, n_changed, n_inserted = _rewrite(
             SIMPLE_CONFIG,
-            radiod_id="bee1-rx888",
+            radiod_id="bee1-status.local",
             offsets={"LISL": 21385},
         )
         assert n_changed == 1
@@ -83,7 +82,7 @@ class TestRewrite:
     def test_inserts_new_line_after_id(self):
         out_lines, n_changed, n_inserted = _rewrite(
             SIMPLE_CONFIG,
-            radiod_id="bee1-rx888",
+            radiod_id="bee1-status.local",
             offsets={"DUCK": 175},
         )
         assert n_changed == 0
@@ -100,7 +99,7 @@ class TestRewrite:
     def test_handles_replace_and_insert_in_one_pass(self):
         out_lines, n_changed, n_inserted = _rewrite(
             SIMPLE_CONFIG,
-            radiod_id="bee1-rx888",
+            radiod_id="bee1-status.local",
             offsets={"DUCK": 175, "LISL": 21385},
         )
         assert n_changed == 1     # LISL
@@ -112,7 +111,7 @@ class TestRewrite:
     def test_preserves_comments_and_spacing(self):
         out_lines, *_ = _rewrite(
             SIMPLE_CONFIG,
-            radiod_id="bee1-rx888",
+            radiod_id="bee1-status.local",
             offsets={"DUCK": 100},
         )
         result = "\n".join(out_lines)
@@ -126,29 +125,29 @@ class TestRewrite:
         # Two [[radiod]] blocks; only the named one should be edited.
         cfg = _config("""
             [[radiod]]
-            id = "rx-A"
+            status = "rx-A.local"
             channel_name = "ca"
             [[radiod.transmitter]]
             id = "T1"
             center_freq_hz = 1000
 
             [[radiod]]
-            id = "rx-B"
+            status = "rx-B.local"
             channel_name = "cb"
             [[radiod.transmitter]]
             id = "T1"
             center_freq_hz = 2000
         """)
         out_lines, n_changed, n_inserted = _rewrite(
-            cfg, radiod_id="rx-B", offsets={"T1": 999},
+            cfg, radiod_id="rx-B.local", offsets={"T1": 999},
         )
         assert n_inserted == 1
         result = "\n".join(out_lines)
         # The T1 in rx-A was NOT touched.
-        before_rxb = result[: result.index("rx-B")]
+        before_rxb = result[: result.index("rx-B.local")]
         assert "tdma_offset_samples" not in before_rxb
         # The T1 in rx-B WAS touched.
-        after_rxb = result[result.index("rx-B") :]
+        after_rxb = result[result.index("rx-B.local") :]
         assert "tdma_offset_samples = 999" in after_rxb
 
     def test_unknown_radiod_id_raises(self):
@@ -166,7 +165,7 @@ class TestAtomicWrite:
         cfg = tmp_path / "codar.toml"
         cfg.write_text(SIMPLE_CONFIG)
         n_changed, n_inserted = update_tdma_offsets_in_toml(
-            cfg, radiod_id="bee1-rx888",
+            cfg, radiod_id="bee1-status.local",
             offsets={"DUCK": 175, "LISL": 21385},
         )
         assert (n_changed, n_inserted) == (1, 1)
@@ -180,7 +179,7 @@ class TestAtomicWrite:
         before = cfg.read_text()
         with pytest.raises(ValueError):
             update_tdma_offsets_in_toml(
-                cfg, radiod_id="bee1-rx888",
+                cfg, radiod_id="bee1-status.local",
                 offsets={"NONEXISTENT": 999},
             )
         assert cfg.read_text() == before

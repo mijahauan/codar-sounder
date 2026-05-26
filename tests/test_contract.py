@@ -172,8 +172,7 @@ class TestValidate:
 [station]
 callsign = "TEST"
 [[radiod]]
-id = "test"
-status_dns = "test.local"
+status = "test.local"
 channel_name = "codar-4mhz"
 [[radiod.transmitter]]
 id = "DUCK"

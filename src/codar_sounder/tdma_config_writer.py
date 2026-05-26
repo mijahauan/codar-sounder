@@ -44,9 +44,12 @@ from typing import Mapping, Tuple
 # a sibling array starts.
 _TABLE_ARRAY_RE = re.compile(r'^\s*\[\[([^\]]+)\]\]\s*(?:#.*)?$')
 
-# Match a `key = "value"` line where key=='id'.  Tolerates surrounding
-# whitespace and trailing comments.
-_ID_LINE_RE = re.compile(r'^(\s*)id\s*=\s*"([^"]*)"\s*(?:#.*)?$')
+# Match a `key = "value"` line where key=='id' or key=='status'.
+# Tolerates surrounding whitespace and trailing comments.  Phase 6
+# cutover (RADIOD-IDENTIFICATION.md §3.1) means the `[[radiod]]`
+# block uses `status` instead of `id`; transmitter blocks still use
+# `id` (a transmitter identifier like "LISL", not a radiod identifier).
+_ID_LINE_RE = re.compile(r'^(\s*)(id|status)\s*=\s*"([^"]*)"\s*(?:#.*)?$')
 
 # Match an existing `tdma_offset_samples = N` line so we can replace
 # the integer in-place without disturbing any leading whitespace.
@@ -134,12 +137,14 @@ def _rewrite(
 
         m_id = _ID_LINE_RE.match(line)
         if m_id:
-            indent, id_value = m_id.group(1), m_id.group(2)
-            # Determine whether this `id` belongs to a [[radiod]] or a
+            indent, key, id_value = m_id.group(1), m_id.group(2), m_id.group(3)
+            # Determine whether this key belongs to a [[radiod]] or a
             # [[radiod.transmitter]] by looking back at the most recent
-            # table-array header in `out`.
+            # table-array header in `out`.  Phase 6: `[[radiod]]`
+            # identifies itself with `status =`; the transmitter block
+            # still uses `id =`.
             last_section = _last_table_array(out)
-            if last_section == "radiod":
+            if last_section == "radiod" and key == "status":
                 if id_value == radiod_id:
                     in_target_radiod = True
                     saw_target_radiod = True
@@ -148,7 +153,7 @@ def _rewrite(
                 out.append(line)
                 i += 1
                 continue
-            if last_section == "radiod.transmitter":
+            if last_section == "radiod.transmitter" and key == "id":
                 current_tx_id = id_value
                 current_tx_indent = indent
                 out.append(line)
@@ -195,7 +200,7 @@ def _rewrite(
 
     if not saw_target_radiod:
         raise ValueError(
-            f"no [[radiod]] block with id={radiod_id!r} found in config"
+            f"no [[radiod]] block with status={radiod_id!r} found in config"
         )
     return out, n_changed, n_inserted
 

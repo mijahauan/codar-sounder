@@ -427,16 +427,21 @@ class SounderDaemon:
         self.processing = config.get("processing", {})
         self._stopped = threading.Event()
 
-        self.radiod_id = radiod_block.get("id", "default")
+        # Phase 6 cutover (RADIOD-IDENTIFICATION.md §3.1): the mDNS
+        # multicast status name IS the identifier.
+        self.status_dns = radiod_block.get("status", "")
+        if not self.status_dns:
+            raise ValueError(
+                "[[radiod]] block has no `status` field.  Run "
+                "`sudo smd radiod migrate --yes` if this config still "
+                "uses the legacy `status_dns` field."
+            )
+        self.radiod_id = self.status_dns
         # Phase-5 (sigmond MULTI-INSTANCE-ARCHITECTURE.md §3): per-
         # instance reporter ID.  None on legacy single-instance hosts;
         # _TransmitterPipeline._build_record() falls back to radiod_id.
         self.reporter_id = reporter_id
         self.channel_name = radiod_block.get("channel_name", "codar")
-        # RADIOD-IDENTIFICATION.md §3.1 — prefer new `status` field;
-        # fall back to legacy `status_dns` during the deprecation window.
-        self.status_dns = (radiod_block.get("status")
-                           or radiod_block.get("status_dns", ""))
 
         # Sample rate is implicitly set by the radiod fragment
         # (etc/radiod-fragment.conf samprate field); v0.2 reads it from

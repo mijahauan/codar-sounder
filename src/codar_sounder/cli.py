@@ -266,7 +266,7 @@ def _handle_daemon(args):
     log.info(
         "starting codar-sounder daemon for radiod %s "
         "(config=%s, reporter_id=%s)",
-        block.get("id", "default"), config_path,
+        block.get("status", "<unconfigured>"), config_path,
         reporter_id or "<derived from radiod_id at row time>",
     )
 
@@ -309,7 +309,7 @@ def _handle_tdma_scan(args):
     if not txs:
         sys.stderr.write(
             f"No [[transmitter]] blocks found for radiod "
-            f"{block.get('id', '?')}\n"
+            f"{block.get('status', '?')}\n"
         )
         sys.exit(2)
 
@@ -320,9 +320,7 @@ def _handle_tdma_scan(args):
     )
     first_tx = txs[0]
     iq_source = make_iq_source(
-        # RADIOD-IDENTIFICATION.md §3.1 — prefer new `status` field;
-        # fall back to legacy `status_dns` during the deprecation window.
-        radiod_status_dns=str(block.get("status") or block.get("status_dns", "")),
+        radiod_status_dns=str(block.get("status", "")),
         channel_name=str(block.get("channel_name", "codar")),
         sample_rate_hz=sample_rate_hz,
         cpi_seconds=float(args.seconds),
@@ -337,7 +335,7 @@ def _handle_tdma_scan(args):
     log = logging.getLogger("codar_sounder.tdma_scan")
     log.info(
         "tdma-scan: radiod=%s channel=%s capture=%d s sample_rate=%d Hz",
-        block.get("id", "?"), block.get("channel_name", "?"),
+        block.get("status", "?"), block.get("channel_name", "?"),
         args.seconds, int(sample_rate_hz),
     )
 
@@ -379,7 +377,7 @@ def _handle_tdma_scan(args):
 
     if args.json:
         out = {
-            "radiod_id": block.get("id", ""),
+            "radiod_id": block.get("status", ""),
             "channel_name": block.get("channel_name", ""),
             "sample_rate_hz": int(sample_rate_hz),
             "sweep_rate_hz_per_s": sweep_rate_hz_per_s,
@@ -407,7 +405,7 @@ def _handle_tdma_scan(args):
         return
 
     print(
-        f"TDMA scan on radiod={block.get('id','?')} "
+        f"TDMA scan on radiod={block.get('status','?')} "
         f"channel={block.get('channel_name','?')} "
         f"κ={sweep_rate_hz_per_s:.1f} Hz/s SRF={sweep_repetition_hz:.1f} Hz"
     )
@@ -448,7 +446,7 @@ def _handle_tdma_scan(args):
             return
         from codar_sounder.tdma_config_writer import update_tdma_offsets_in_toml
         config_path = _resolved_config_path(args)
-        radiod_id = block.get("id", "")
+        radiod_id = block.get("status", "")
         n_changed, n_inserted = update_tdma_offsets_in_toml(
             config_path, radiod_id, offsets_to_write,
         )

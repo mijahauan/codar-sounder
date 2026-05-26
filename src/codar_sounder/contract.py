@@ -53,22 +53,10 @@ def build_inventory(config: dict, config_path: Path) -> dict:
     all_log_paths: dict[str, Any] = {}
 
     for block in radiod_blocks(config):
-        radiod_id = block.get("id", "default")
-        # RADIOD-IDENTIFICATION.md §3.1 — prefer the new `status` field;
-        # fall back to legacy `status_dns` with a DeprecationWarning so
-        # operators see the migration prompt.  Phase 6 cutover removes
-        # the `status_dns` fallback.
+        # Phase 6 cutover (RADIOD-IDENTIFICATION.md §3.1): the mDNS
+        # multicast status name IS the identifier.
         status_dns = block.get("status", "")
-        if not status_dns:
-            legacy = block.get("status_dns", "")
-            if legacy:
-                import warnings
-                warnings.warn(
-                    "[[radiod]] status_dns is deprecated; rename to "
-                    "[[radiod]] status per RADIOD-IDENTIFICATION.md §3.1",
-                    DeprecationWarning, stacklevel=2,
-                )
-                status_dns = legacy
+        radiod_id = status_dns
 
         for tx in transmitters(block):
             tx_id = tx.get("id", "<unnamed>")
@@ -89,10 +77,8 @@ def build_inventory(config: dict, config_path: Path) -> dict:
 
             # RADIOD-IDENTIFICATION.md §3.2 — inventory radiod_id is
             # the mDNS control/status multicast name (the only
-            # functional identifier).  Fall back to the local label
-            # when no status_dns is declared so legacy configs still
-            # produce parseable inventory.
-            inventory_radiod_id = status_dns or radiod_id
+            # functional identifier).
+            inventory_radiod_id = status_dns
             instance: dict[str, Any] = {
                 "instance": tx_id,
                 "radiod_id": inventory_radiod_id,
@@ -195,11 +181,14 @@ def _collect_issues(config: dict) -> list[dict]:
         })
 
     for block in blocks:
-        rid = block.get("id", "<unnamed>")
-        if not block.get("status_dns"):
+        rid = block.get("status", "<unnamed>")
+        if not block.get("status"):
             issues.append({
                 "severity": "fail", "instance": rid,
-                "message": "radiod.status_dns not set",
+                "message": (
+                    "[[radiod]] block has no `status` field "
+                    "(mDNS multicast name)"
+                ),
             })
         if not block.get("channel_name"):
             issues.append({

@@ -12,8 +12,7 @@ output_dir = "/tmp/codar-sounder-test/output"
 log_dir    = "/tmp/codar-sounder-test/log"
 
 [[radiod]]
-id           = "test-rx888"
-status_dns   = "test-status.local"
+status       = "test-status.local"
 channel_name = "codar-4mhz"
 
 [[radiod.transmitter]]

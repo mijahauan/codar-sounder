@@ -46,8 +46,7 @@ def _bare_config(**processing) -> dict:
 
 def _radiod_block(**overrides) -> dict:
     block = {
-        "id": "test-radiod",
-        "status_dns": "test.local",
+        "status": "test.local",
         "channel_name": "codar-test",
         "transmitter": [
             {
