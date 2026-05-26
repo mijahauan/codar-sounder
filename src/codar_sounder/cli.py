@@ -234,7 +234,28 @@ def _handle_daemon(args):
         explicit_path=args.config,
     )
     config = load_config(config_path)
-    block = resolve_radiod_block(config, args.radiod_id)
+    try:
+        block = resolve_radiod_block(config, args.radiod_id)
+    except ValueError:
+        # Post-`smd instance migrate` soft-cutover: the systemd
+        # template still passes --radiod-id %i (= reporter ID),
+        # which doesn't match the [[radiod]] block's id (= mDNS
+        # source label) in the per-instance config.  When --instance
+        # was given the per-instance config defines this instance's
+        # source unambiguously; fall through to None (single-block
+        # resolution).  Warn so the mismatch stays visible.  Legacy
+        # multi-radiod shared configs (no --instance) keep strict id
+        # matching.
+        if args.radiod_id is None or instance is None:
+            raise
+        logging.getLogger("codar_sounder.daemon").warning(
+            "--radiod-id=%r did not match any [[radiod]] block in %s "
+            "(--instance=%r); falling through to single-block "
+            "per-instance path.  Drop --radiod-id from the systemd "
+            "template once all reporters are migrated.",
+            args.radiod_id, config_path, instance,
+        )
+        block = resolve_radiod_block(config, None)
 
     # Per-instance reporter_id from [instance] block; None during the
     # cutover (legacy shared config has no such block).  Row-construction
