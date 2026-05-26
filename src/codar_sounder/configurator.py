@@ -35,9 +35,11 @@ def cmd_config_init(args) -> int:
     print(f"codar-sounder: wrote {target}")
     print("Edit the file to set:")
     print("  [station] callsign / grid_square / receiver_lat / receiver_lon")
-    print("  [[radiod]] id / status_dns / channel_name")
+    print("  [[radiod]] status / channel_name")
+    print("    (`status` is the mDNS multicast name of the radiod —")
+    print("     RADIOD-IDENTIFICATION.md §3.1)")
     print("  [[radiod.transmitter]] for each CODAR station you want to monitor")
-    print("Then enable a service instance:  sudo systemctl enable codar-sounder@<radiod-id>")
+    print("Then enable a service instance:  sudo systemctl enable codar-sounder@<reporter-id>")
 
     # Surface contract §14.3 env-bag values when present (operator-friendly).
     call = os.environ.get("STATION_CALL")

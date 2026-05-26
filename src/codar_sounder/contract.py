@@ -54,7 +54,21 @@ def build_inventory(config: dict, config_path: Path) -> dict:
 
     for block in radiod_blocks(config):
         radiod_id = block.get("id", "default")
-        status_dns = block.get("status_dns", "")
+        # RADIOD-IDENTIFICATION.md §3.1 — prefer the new `status` field;
+        # fall back to legacy `status_dns` with a DeprecationWarning so
+        # operators see the migration prompt.  Phase 6 cutover removes
+        # the `status_dns` fallback.
+        status_dns = block.get("status", "")
+        if not status_dns:
+            legacy = block.get("status_dns", "")
+            if legacy:
+                import warnings
+                warnings.warn(
+                    "[[radiod]] status_dns is deprecated; rename to "
+                    "[[radiod]] status per RADIOD-IDENTIFICATION.md §3.1",
+                    DeprecationWarning, stacklevel=2,
+                )
+                status_dns = legacy
 
         for tx in transmitters(block):
             tx_id = tx.get("id", "<unnamed>")
