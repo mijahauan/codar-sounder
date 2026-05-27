@@ -27,7 +27,7 @@ from codar_sounder.config import (
 from codar_sounder.version import GIT_INFO
 
 
-CONTRACT_VERSION = "0.7"
+CONTRACT_VERSION = "0.8"
 
 
 def _client_version() -> str:

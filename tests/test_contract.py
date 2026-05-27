@@ -77,7 +77,7 @@ class TestInventory:
         assert self.data["client"] == "codar-sounder"
 
     def test_contract_version(self):
-        assert self.data["contract_version"] == "0.7"
+        assert self.data["contract_version"] == "0.8"
 
     def test_timing_authority_applied_explicit_null(self):
         """CONTRACT v0.7 §3/§18 — runtime-state field for the §18

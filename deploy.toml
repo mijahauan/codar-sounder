@@ -11,7 +11,7 @@ kind        = "client"
 description = "Opportunistic ionospheric sounder using CODAR chirp transmissions"
 repo        = "https://github.com/mijahauan/codar-sounder"
 requires    = ["ka9q-python", "ka9q-radio"]
-contract    = "0.6"
+contract    = "0.8"
 
 # Lifecycle ordering. Starts after radiod (priority 0) but in parallel with
 # the decoder chain — codar-sounder doesn't feed any other client.
