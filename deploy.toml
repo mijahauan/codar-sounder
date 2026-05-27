@@ -102,3 +102,14 @@ venv    = "/opt/git/sigmond/codar-sounder/venv"
 name    = "numpy"
 version = ">=1.24.0"
 venv    = "/opt/git/sigmond/codar-sounder/venv"
+
+# ---------------------------------------------------------------------------
+# Sigmond UI hooks (drop-in registration for `smd watch` + TUI Activity).
+# Consumed by lib/sigmond/client_features.py.
+# ---------------------------------------------------------------------------
+
+[client_features.watch]
+verb         = "codar"
+description  = "CODAR per-station soundings + SNR rollup"
+verbose      = true
+per_instance = true
