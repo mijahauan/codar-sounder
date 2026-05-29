@@ -1,0 +1,143 @@
+# codar-sounder operator-help sidecar.
+#
+# Same schema as psk/wspr/hfdl-recorder: per-key title / help /
+# example / validator_hint / required, plus `hidden = true` to keep
+# tier-1 invariants off the wizard surface.
+#
+# Three-tier audit applied 2026-05-29:
+#   * tier 1 — install-canonical paths; hidden.
+#   * tier 2 — site-level operator knobs; surfaced with help bodies.
+#   * tier 3 — per-instance differentiators; [instance].reporter_id
+#              is wizard-locked by sigmond directly.
+#
+# The [[radiod.transmitter]] sub-blocks (TX catalogue: center
+# frequency, sweep rate, sweep BW, etc.) are GPS-locked TX constants
+# per the docstring in codar_sounder/config.py — NOT operator knobs.
+# The wizard auto-skips nested arrays-of-tables, so these don't need
+# `hidden = true` marks.  Future work: a frequency-picker widget
+# backed by a canonical KNOWN_TRANSMITTERS table.
+
+# --- Station --------------------------------------------------------
+
+[station.callsign]
+title          = "Amateur callsign"
+help           = """Your amateur radio callsign (uppercase).
+Used as the operator identity for HamSCI / PSWS metadata."""
+example        = "AC0G"
+validator_hint = "1-9 letters/digits/slashes"
+required       = true
+
+[station.grid_square]
+title          = "Maidenhead grid square (6-10 chars)"
+help           = """Your Maidenhead locator.  6 characters minimum,
+up to 10 for fine-grained location reporting."""
+example        = "EM38ww40pk"
+validator_hint = "2 letters + 2 digits + 2-8 alphanumeric chars"
+required       = true
+
+[station.receiver_lat]
+title          = "Receiver latitude (decimal degrees)"
+help           = """Antenna latitude in decimal degrees (positive
+north, negative south).  Used to compute group-range geometry
+against each transmitter's tx_lat/tx_lon."""
+example        = "38.8125"
+validator_hint = "decimal degrees, -90.0 to 90.0"
+required       = true
+
+[station.receiver_lon]
+title          = "Receiver longitude (decimal degrees)"
+help           = """Antenna longitude in decimal degrees (positive
+east, negative west)."""
+example        = "-90.4063"
+validator_hint = "decimal degrees, -180.0 to 180.0"
+required       = true
+
+# --- Paths (install-canonical FHS dirs — hidden) -------------------
+
+[paths.output_dir]
+hidden = true
+
+[paths.log_dir]
+hidden = true
+
+# --- Radiod binding -------------------------------------------------
+
+[radiod.status]
+title          = "ka9q-radio mDNS status host"
+help           = """The mDNS hostname of the radiod instance this
+sounder consumes RTP from -- always .local, never an IP.
+Use `smd diag radiod` to list discovered hosts."""
+example        = "bee1-status.local"
+validator_hint = "must end with .local"
+required       = true
+
+[radiod.channel_name]
+title          = "Radiod channel name"
+help           = """The named radiod channel block this sounder
+draws from (matches a section name in radiod's 51-codar.conf).
+Convention: codar-<freq-mhz>mhz, e.g. codar-13mhz for the 13.45 MHz
+Rutgers cluster, codar-4mhz for a 4.x MHz band."""
+example        = "codar-13mhz"
+required       = true
+
+# --- Processing knobs ----------------------------------------------
+
+[processing.sample_rate_hz]
+title          = "Sample rate (Hz)"
+help           = """Audio sample rate ka9q-radio delivers to the
+sounder.  Must exceed the CODAR signal bandwidth for the chosen
+band:
+
+  * 13.45 MHz cluster (SEAB/SPRK): BW = 49.63 kHz -> 64000 Hz
+    (1280 samples per 20 ms ka9q-radio block).
+  * 4.x MHz cluster:                BW = 25 kHz   -> 32000 Hz.
+
+Coupled to the [[radiod.transmitter]] catalog: change the TX list
+to a different band and you must change this value too."""
+example        = "64000"
+validator_hint = "integer Hz (typically 32000 or 64000)"
+required       = true
+
+[processing.coherent_seconds]
+title          = "Coherent integration window (seconds)"
+help           = """How many seconds of receive samples to coherently
+integrate per dechirp cycle.  Longer = better SNR but lower time
+resolution on transient events.  15 s is the canonical default."""
+example        = "15"
+validator_hint = "positive integer or float (seconds)"
+required       = false
+
+[processing.range_min_km]
+title          = "Min group range (km)"
+help           = """Floor on the geometry-validation range filter.
+Peaks below this are rejected as too-near reflections (or as
+direct-path / ground-wave bleed).
+
+CRITICAL: must exceed max(ground_distance_km) for every transmitter
+in this band's catalog -- otherwise every legitimate skywave peak
+gets geometry-rejected.  For the 13.45 MHz Rutgers cluster, SEAB's
+ground distance from bee1 is 1417 km, so range_min_km = 1430 is
+the safe floor (was 1100 -> ~2587 spurious rejections per 2h)."""
+example        = "1430"
+validator_hint = "positive integer (km), > max(tx ground distance)"
+required       = true
+
+[processing.range_max_km]
+title          = "Max group range (km)"
+help           = """Ceiling on the geometry-validation range filter.
+Peaks beyond this are rejected (typically noise / multi-hop bleed).
+Default 2500 km."""
+example        = "2500"
+validator_hint = "positive integer (km)"
+required       = false
+
+[processing.snr_threshold_db]
+title          = "Peak SNR threshold (dB)"
+help           = """Minimum SNR for a dechirp peak to be reported.
+Lower = more candidate peaks (and more noise); higher = stricter
+quality.  On the 13.45 MHz band, 2.0 dB is the working default;
+the 4 MHz band typically needs ~1 dB because the noise floor is
+higher."""
+example        = "2.0"
+validator_hint = "float dB"
+required       = false
