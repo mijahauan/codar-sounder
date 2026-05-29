@@ -113,3 +113,9 @@ verb         = "codar"
 description  = "CODAR per-station soundings + SNR rollup"
 verbose      = true
 per_instance = true
+
+[client_features.receiver_channels]
+description  = "CODAR per-station IQ channels (one per [[transmitter]])"
+per_instance = true
+parser_file  = "src/codar_sounder/sigmond_tui.py"
+parser_attr  = "parse_receiver_channels"
