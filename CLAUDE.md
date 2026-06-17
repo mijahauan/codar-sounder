@@ -191,11 +191,17 @@ Sections implemented:
   `sigmond.wizard_dispatch`.
 - **§17** — additive HamSCI sink writer (`codar.spots`) alongside
   canonical JSONL.
-- **§18 (timing authority)** — `authority_reader.py` exists as a
-  snapshot subscriber stub. `timing_authority_applied` may be
-  `null` (Real-time Transport Protocol- (RTP-) default) depending
-  on whether subscription has been wired into the CPI loop on
-  this host. Verify against inventory.
+- **§18 (timing authority)** — `authority_reader.py` subscribes to
+  `/run/hf-timestd/authority.json` and **is** wired into the CPI loop:
+  `stream.py:_compute_anchor_utc` anchors each CPI's UTC from
+  `rtp_to_wallclock` + the published offset (METROLOGY §4.5), and
+  `output.py` records the provenance block per CPI.  The inventory
+  `timing_authority_applied` field stays `null` **by design** — `null`
+  reports RTP-default mode (RTP-derived label + opportunistic offset),
+  the same convention `wspr`/`psk` use; it becomes a populated
+  `{source,tier,sigma_ns,...}` object only when a future iteration uses a
+  §18 authority to *gate* behavior (e.g. TX-cycle gating), not merely to
+  offset labels.
 
 ## Production paths
 
