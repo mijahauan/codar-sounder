@@ -1,24 +1,48 @@
 """`codar-sounder config init|edit` — first-run wizard + edit flow (CONTRACT §14).
 
-v0.1: minimal — copy the template into place, populate STATION_* and
-SIGMOND_RADIOD_STATUS env-bag defaults if available, and tell the operator
-to finish editing manually.  An interactive station picker driven by
-``data/codar-stations.toml`` lands in v0.2.
+The interactive path is a whiptail **transmitter picker** (v0.2):
+``scripts/config-wizard.sh`` lets the operator multi-select which CODAR
+sites to record from the distance-ranked inventory
+(``codar-sounder stations``), grouped by band into ``[[radiod]]`` blocks
+and written back via ``config apply``.  Dispatched through
+``sigmond.wizard_dispatch`` (same gate/contract the other recorders use).
+
+The non-interactive path (no TTY, ``--non-interactive``, or whiptail
+absent) falls back to copying the template into place and surfacing the
+env-bag (``STATION_*`` / ``SIGMOND_RADIOD_STATUS``) defaults for the
+operator to finish by hand.
 """
 
 from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
+from typing import Optional
 
 from codar_sounder.config import DEFAULT_CONFIG_PATH
 
 _REPO = Path(__file__).resolve().parent.parent.parent
 _TEMPLATE = _REPO / "config" / "codar-sounder-config.toml.template"
+_WIZARD_PATH = _REPO / "scripts" / "config-wizard.sh"
 
 
 def cmd_config_init(args) -> int:
+    """Dispatch to the whiptail picker when available; else copy template."""
+    if not getattr(args, "non_interactive", False) and _wizard_available(args):
+        # Ensure a file exists for the wizard's `config show` prefill /
+        # `config apply` merge target.  Idempotent; respects --reconfig.
+        target = Path(getattr(args, "config", None) or DEFAULT_CONFIG_PATH)
+        if not target.exists() or bool(getattr(args, "reconfig", False)):
+            rv = _legacy_config_init(args)
+            if rv != 0:
+                return rv
+        return _exec_wizard(args, "init")
+    return _legacy_config_init(args)
+
+
+def _legacy_config_init(args) -> int:
     target = Path(getattr(args, "config", None) or DEFAULT_CONFIG_PATH)
     reconfig = bool(getattr(args, "reconfig", False))
 
@@ -94,9 +118,100 @@ def cmd_config_edit(args) -> int:
         print(target.read_text())
         return 0
 
+    # Interactive edit re-runs the transmitter picker (it prefills from the
+    # existing config via `config show`), so an operator can add/drop sites
+    # without hand-editing.  Falls back to $EDITOR when whiptail is absent.
+    if _wizard_available(args):
+        return _exec_wizard(args, "edit")
+
     editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
     import subprocess
     return subprocess.run([editor, str(target)], check=False).returncode
+
+
+# ---------------------------------------------------------------------------
+# Whiptail wizard dispatch — delegates to sigmond.wizard_dispatch when
+# importable (the canonical shared lib the recorders use), with a local
+# fallback so codar-sounder still works standalone.  Mirrors
+# psk-recorder/src/psk_recorder/configurator.py.
+# ---------------------------------------------------------------------------
+
+try:
+    import sigmond.wizard_dispatch as _sigmond_wd
+    assert _sigmond_wd.SIGMOND_WIZARD_DISPATCH_API == "1", (
+        f"sigmond.wizard_dispatch API "
+        f"{_sigmond_wd.SIGMOND_WIZARD_DISPATCH_API!r} != '1' "
+        f"(expected by codar-sounder)"
+    )
+    _SIGMOND_WIZARD_LIB_SH: Optional[Path] = (
+        Path(_sigmond_wd.__file__).resolve().parent / "wizard_dispatch.sh"
+    )
+    if not _SIGMOND_WIZARD_LIB_SH.is_file():
+        _SIGMOND_WIZARD_LIB_SH = None
+except (ImportError, AssertionError):
+    _sigmond_wd = None
+    _SIGMOND_WIZARD_LIB_SH = None
+
+
+def _wizard_available(args=None) -> bool:
+    """True iff the shell picker should run for this invocation.
+
+    Defers to sigmond.wizard_dispatch.is_wizard_available when sigmond is
+    importable (shared gate: --non-interactive off, stdin+stdout TTYs,
+    whiptail on PATH, wizard script present + executable); falls back to
+    the same checks locally when sigmond isn't installed."""
+    if _sigmond_wd is not None:
+        if args is None:
+            import argparse as _argparse
+            args = _argparse.Namespace(non_interactive=False)
+        return _sigmond_wd.is_wizard_available(args, _WIZARD_PATH)
+
+    import shutil as _shutil
+    if getattr(args, "non_interactive", False):
+        return False
+    if not _WIZARD_PATH.is_file() or not os.access(_WIZARD_PATH, os.X_OK):
+        return False
+    if not sys.stdout.isatty() or not sys.stdin.isatty():
+        return False
+    return _shutil.which("whiptail") is not None
+
+
+def _exec_wizard(args, mode: str) -> int:
+    """Hand off to scripts/config-wizard.sh, preserving --config."""
+    extra_env: dict = {
+        # The wizard shells back to `codar-sounder stations|config apply`;
+        # use the same binary the caller invoked so a non-default --config
+        # (and the editable-vs-/usr/local install split) keeps working.
+        "CODAR_SOUNDER_CLI": sys.argv[0],
+    }
+    extra_args = [mode]
+    config_arg = getattr(args, "config", None)
+    if config_arg:
+        extra_args += ["--config", str(config_arg)]
+
+    if _sigmond_wd is not None:
+        if _SIGMOND_WIZARD_LIB_SH is not None:
+            extra_env["SIGMOND_WIZARD_LIB_SH"] = str(_SIGMOND_WIZARD_LIB_SH)
+        # parse=None → the wizard pipes JSON into `config apply` itself and
+        # renders its own UI; default interactive=True inherits the TTY.
+        result = _sigmond_wd.exec_wizard(
+            _WIZARD_PATH, extra_env=extra_env, parse=None, extra_args=extra_args,
+        )
+        if result.error:
+            print(f"codar-sounder: wizard exec failed: {result.error}",
+                  file=sys.stderr)
+            return 1
+        return result.returncode
+
+    # Local fallback (sigmond not importable).
+    import subprocess
+    env = os.environ.copy()
+    env.update(extra_env)
+    try:
+        return subprocess.call([str(_WIZARD_PATH)] + extra_args, env=env)
+    except FileNotFoundError as exc:
+        print(f"codar-sounder: wizard exec failed: {exc}", file=sys.stderr)
+        return 1
 
 
 # ---------------------------------------------------------------------------
@@ -117,14 +232,13 @@ def cmd_config_edit(args) -> int:
 # actual sections: [station], [paths], [processing], [[radiod]],
 # plus [instance] from the per-reporter migration.
 #
-# Follow-up worth noting: the `[[radiod.transmitter]]` blocks would
-# benefit from a "pick from a known CODAR transmitter suite" UI in
-# sigmond's wizard.  That requires codar-sounder to publish a
-# canonical KNOWN_TRANSMITTERS table (id / freq / sweep_rate /
-# location) as schema data; once that lands, the wizard's picker
-# renders transmitters as a multi-select.  Not in this commit —
-# Phase 2's goal is the JSON contract surface, not new wizard
-# widgets.
+# The `[[radiod.transmitter]]` picker that this follow-up envisioned now
+# exists: `core/stations.py` is the canonical inventory (id / freq /
+# sweep params / location), surfaced as `codar-sounder stations --json`;
+# `scripts/config-wizard.sh` renders it as a whiptail multi-select and
+# writes the chosen sites back through `config apply` (below).  That apply
+# path must therefore serialize nested `[[radiod.transmitter]]`
+# arrays-of-tables to valid TOML — see _serialize_toml.
 # ---------------------------------------------------------------------------
 
 import copy
@@ -306,13 +420,27 @@ def _serialize_toml(d: dict, parent: str = "") -> str:
         header = f"{parent}.{k}" if parent else k
         for block in blocks:
             lines.append(f"[[{header}]]")
+            # Emit this table's scalars / inline arrays BEFORE any
+            # sub-tables, so a following ``[[header.child]]`` header
+            # doesn't swallow scalars that belong to this block.  A
+            # nested list-of-dicts (e.g. [[radiod.transmitter]]) recurses
+            # as its own array-of-tables rather than collapsing to an
+            # inline array (which would emit invalid TOML).
+            sub_scalars: list[str] = []
+            sub_tables: list[tuple[str, object]] = []
             for bk in sorted(block.keys()):
                 bv = block[bk]
                 if isinstance(bv, dict):
-                    lines.append(_serialize_toml({bk: bv}, parent=header))
+                    sub_tables.append((bk, bv))
+                elif (isinstance(bv, list) and bv
+                      and all(isinstance(item, dict) for item in bv)):
+                    sub_tables.append((bk, bv))
                 elif isinstance(bv, list):
-                    lines.append(f"{bk} = {_toml_inline_array(bv)}")
+                    sub_scalars.append(f"{bk} = {_toml_inline_array(bv)}")
                 else:
-                    lines.append(f"{bk} = {_toml_scalar(bv)}")
+                    sub_scalars.append(f"{bk} = {_toml_scalar(bv)}")
+            lines.extend(sub_scalars)
+            for bk, bv in sub_tables:
+                lines.append(_serialize_toml({bk: bv}, parent=header))
             lines.append("")
     return "\n".join(lines)

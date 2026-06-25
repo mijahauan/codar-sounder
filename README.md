@@ -99,8 +99,8 @@ and the rationale for every recalibration — lives in
 
 v0.7.x — multi-hop inversion + HF-calibrated scintillation on top
 of v0.4's feature-complete single-antenna release.  Implements
-the sigmond client contract v0.7 (`inventory --json`, `validate
---json`, `version --json`, `config init|edit`, `tdma-scan`).
+the sigmond client contract v0.8 (`inventory --json`, `validate
+--json`, `version --json`, `stations`, `config init|edit`, `tdma-scan`).
 
 The methodology document records the release-by-release evolution
 of the science pipeline (`docs/METHODOLOGY.md` §12).
@@ -109,6 +109,30 @@ of the science pipeline (`docs/METHODOLOGY.md` §12).
 processing — needs a second physical antenna to extract Stokes
 parameters.  Revisit when the second antenna is installed.
 
+## Choosing which transmitters to record
+
+There are ~60 known CODAR sites; a given receiver hears only some of
+them, and which ones depends on your location and the ionosphere.  You
+don't hand-write transmitter blocks — use the picker:
+
+```
+sudo smd config init codar-sounder        # whiptail multi-select picker
+```
+
+It lists the known sites ranked by distance from your receiver
+(pre-checking those in the prime 200–2000 km one-hop window), groups
+your choices by band into radiod channels, and writes a validated
+config.  To preview the ranked inventory without configuring:
+
+```
+codar-sounder stations --receiver-lat <lat> --receiver-lon <lon>
+codar-sounder stations --receiver-lat <lat> --receiver-lon <lon> --json   # for tooling
+```
+
+The site database (`data/codar-stations.toml`) is canonical: the picker
+generates the MHz→Hz frequency and sweep parameters from it, so a
+hand-typed transcription error can't slip into the config.
+
 ## Install
 
 Pattern A (sigmond-managed):
@@ -116,6 +140,7 @@ Pattern A (sigmond-managed):
 ```
 sudo smd component install codar-sounder
 sudo smd apply        # writes the [[radiod.fragment]] channel into radiod
+sudo smd config init codar-sounder    # pick transmitters (see above)
 sudo systemctl start codar-sounder@<radiod-id>
 ```
 

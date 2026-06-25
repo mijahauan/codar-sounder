@@ -114,6 +114,24 @@ def main():
     )
     _common(p_tdma)
 
+    p_stn = sub.add_parser(
+        "stations",
+        help="List known CODAR transmitters ranked by distance from the receiver",
+    )
+    p_stn.add_argument("--receiver-lat", type=float, default=None,
+                       help="Receiver latitude (deg); default reads [station] from config")
+    p_stn.add_argument("--receiver-lon", type=float, default=None,
+                       help="Receiver longitude (deg); default reads [station] from config")
+    p_stn.add_argument("--band", default=None,
+                       help="Restrict to one band label (e.g. '4–5 MHz (long-range)')")
+    p_stn.add_argument("--min-range-km", type=float, default=0.0)
+    p_stn.add_argument("--max-range-km", type=float, default=4000.0)
+    p_stn.add_argument("--prime-only", action="store_true",
+                       help="Only sites in the prime one-hop window (200–2000 km)")
+    p_stn.add_argument("--json", action="store_true",
+                       help="Emit JSON instead of a human-readable table")
+    _common(p_stn)
+
     p_cfg = sub.add_parser("config", help="Configure codar-sounder")
     cfg_sub = p_cfg.add_subparsers(dest="config_command")
     p_init = cfg_sub.add_parser("init", help="write fresh config from template")
@@ -161,6 +179,8 @@ def main():
         _handle_daemon(args)
     elif args.command == "tdma-scan":
         _handle_tdma_scan(args)
+    elif args.command == "stations":
+        _handle_stations(args)
     elif args.command == "config":
         _handle_config(args)
     else:
@@ -472,6 +492,69 @@ def _handle_tdma_scan(args):
             f"({n_changed} replaced, {n_inserted} inserted)",
             file=sys.stderr,
         )
+
+
+def _handle_stations(args):
+    """List known CODAR transmitters ranked by distance from the receiver.
+
+    Receiver coordinates come from --receiver-lat/--receiver-lon when given,
+    otherwise from the config's [station] block.  This is the machine-readable
+    inventory behind the `config init` picker and sigmond's TUI multi-select.
+    """
+    from codar_sounder.core.stations import (
+        PRIME_MAX_KM, PRIME_MIN_KM, audible_transmitters,
+    )
+
+    rx_lat = args.receiver_lat
+    rx_lon = args.receiver_lon
+    if rx_lat is None or rx_lon is None:
+        from codar_sounder.config import load_config
+        try:
+            config = load_config(_resolved_config_path(args))
+            station = config.get("station", {})
+            if rx_lat is None:
+                rx_lat = station.get("receiver_lat")
+            if rx_lon is None:
+                rx_lon = station.get("receiver_lon")
+        except FileNotFoundError:
+            pass
+    if rx_lat is None or rx_lon is None:
+        sys.stderr.write(
+            "stations: receiver location unknown — pass --receiver-lat / "
+            "--receiver-lon, or set [station] receiver_lat/receiver_lon in "
+            "the config.\n"
+        )
+        sys.exit(2)
+
+    min_km = PRIME_MIN_KM if args.prime_only else args.min_range_km
+    max_km = PRIME_MAX_KM if args.prime_only else args.max_range_km
+    cands = audible_transmitters(
+        float(rx_lat), float(rx_lon),
+        min_range_km=min_km, max_range_km=max_km,
+        bands=[args.band] if args.band else None,
+    )
+
+    if args.json:
+        print(json.dumps({
+            "receiver_lat": float(rx_lat),
+            "receiver_lon": float(rx_lon),
+            "prime_window_km": [PRIME_MIN_KM, PRIME_MAX_KM],
+            "count": len(cands),
+            "transmitters": [c.to_dict() for c in cands],
+        }, indent=2))
+        return
+
+    if not cands:
+        print("No CODAR transmitters match the given filters.")
+        return
+    print(f"{len(cands)} CODAR transmitter(s) from "
+          f"({float(rx_lat):.3f}, {float(rx_lon):.3f}), nearest first "
+          f"(★ = prime one-hop {PRIME_MIN_KM:.0f}–{PRIME_MAX_KM:.0f} km):")
+    print(f"  {'id':5} {'freq':>8}  {'dist':>7}  {'brg':>5}  {'band':24} assoc")
+    for c in cands:
+        star = "★" if c.in_prime_range else " "
+        print(f"{star} {c.id:5} {c.freq_mhz:7.3f}M {c.distance_km:6.0f}km "
+              f"{c.bearing_deg:5.0f}° {c.band:24} {c.association}")
 
 
 def _handle_config(args):

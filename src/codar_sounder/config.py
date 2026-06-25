@@ -170,12 +170,31 @@ def missing_tx_fields(tx: dict) -> list[str]:
     return [f for f in REQUIRED_TX_FIELDS if f not in tx]
 
 
+# TX-RX geometry comes from the shared suite library (hamsci-dsp), which
+# is backed by geographiclib (Karney geodesics on the WGS-84 ellipsoid).
+# These thin wrappers keep codar's historical call sites (contract.py,
+# cli.py tdma-scan) working while the actual math lives in one place for
+# the whole suite.  Switching from the former local haversine shifts
+# distances ~0.5% (spherical → ellipsoidal) — immaterial to codar's
+# 50/2000 km validate thresholds and sample-offset estimates.
+from hamsci_dsp.geometry import bearing_deg, great_circle_km
+
+
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance between two (lat, lon) points in km."""
-    import math
-    r = 6371.0088
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
+    """Geodesic (WGS-84) TX-RX distance in km — delegates to hamsci-dsp.
+
+    Name retained for backwards compatibility with existing call sites;
+    the implementation is now the suite-shared geodesic, not haversine.
+    """
+    return great_circle_km(lat1, lon1, lat2, lon2)
+
+
+def initial_bearing_deg(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Initial geodesic bearing (degrees, 0–360) from point 1 toward point 2.
+
+    Delegates to hamsci-dsp.  Annotates each transmitter candidate with
+    the compass direction an operator should expect it from (mirrors
+    superdarn-sounder's core/radars.py).  Informational only — codar
+    reception is omnidirectional so bearing doesn't gate selection.
+    """
+    return bearing_deg(lat1, lon1, lat2, lon2)

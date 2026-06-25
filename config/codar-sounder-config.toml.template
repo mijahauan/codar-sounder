@@ -41,23 +41,31 @@ channel_name = "codar-4mhz"
 # radiod's antenna at the channel_name's centre frequency.  Multiple
 # US-east-coast 4.537 MHz transmitters share the same band; list each
 # separately so the dechirper knows their per-station sweep parameters.
+#
+# You normally DON'T hand-write these blocks: run the picker instead —
+#   sudo smd config init codar-sounder      (whiptail multi-select)
+# or list the inventory ranked by distance from your receiver —
+#   codar-sounder stations --receiver-lat <lat> --receiver-lon <lon>
+# The picker generates these blocks from data/codar-stations.toml, so the
+# MHz→Hz and sweep-rate units are always correct.  The values below are a
+# worked example (DUCK + HATY, both 4.537 MHz, one shared channel).
 [[radiod.transmitter]]
 id                  = "DUCK"
 center_freq_hz      = 4537180
-sweep_rate_hz_per_s = -25733913
-sweep_bw_hz         = 25733
+sweep_rate_hz_per_s = -25733.913
+sweep_bw_hz         = 25734
 sweep_repetition_hz = 1
 tx_lat_deg          = 36.180350
 tx_lon_deg          = -75.750133
 
 # [[radiod.transmitter]]
-# id                  = "LISL"
+# id                  = "HATY"
 # center_freq_hz      = 4537180
-# sweep_rate_hz_per_s = -25733913
-# sweep_bw_hz         = 25733
+# sweep_rate_hz_per_s = -25733.913
+# sweep_bw_hz         = 25734
 # sweep_repetition_hz = 1
-# tx_lat_deg          = 36.691717
-# tx_lon_deg          = -75.922633
+# tx_lat_deg          = 35.257217
+# tx_lon_deg          = -75.519883
 
 # A second radiod (e.g. a north-pointing antenna) gets its own block:
 #

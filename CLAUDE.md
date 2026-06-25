@@ -51,7 +51,8 @@ codar-sounder validate --json       # config validation
 codar-sounder version --json
 codar-sounder daemon --config <path> --radiod-id <id>
 codar-sounder tdma-scan             # probe time-division multiple access (TDMA) slot assignments for co-band tx's
-codar-sounder config init|edit      # whiptail wizard via sigmond.wizard_dispatch
+codar-sounder stations --json       # known CODAR tx's ranked by distance from the receiver
+codar-sounder config init|edit      # whiptail transmitter PICKER via sigmond.wizard_dispatch
 ```
 
 ## Architecture
@@ -108,12 +109,16 @@ HamSCI sink — additive (CONTRACT §17)
 ```
 src/codar_sounder/
   cli.py                  # argparse entry — subcommands listed above
-  config.py               # TOML loader, defaults
-  configurator.py         # `config init|edit` whiptail via sigmond.wizard_dispatch
-  contract.py             # inventory/validate JSON builders (CONTRACT_VERSION = "0.7")
+  config.py               # TOML loader, defaults; TX-RX geometry delegates to hamsci-dsp
+  configurator.py         # `config init|edit` whiptail PICKER via sigmond.wizard_dispatch;
+                          #   `config show|apply` JSON round-trip (serializes nested
+                          #   [[radiod.transmitter]] arrays-of-tables to valid TOML)
+  contract.py             # inventory/validate JSON builders (CONTRACT_VERSION = "0.8")
   tdma_config_writer.py   # render TDMA slot config from tdma-scan results
   version.py              # GIT_INFO dict
   core/
+    stations.py           # CODAR tx inventory + audibility ranking (audible_transmitters,
+                          #   the MHz→Hz units bridge) — analogue of superdarn core/radars.py
     daemon.py             # orchestrates the per-CPI pipeline below
     stream.py             # RadiodIQSource — wideband IQ via ka9q-python
                           #   (uses low_edge/high_edge kwargs added in ≥3.11)
@@ -124,12 +129,15 @@ src/codar_sounder/
     output.py             # daily-rotated JSONL + HamSCI sink writer
     tdma.py               # TDMA slot detection / phase wrapping
     authority_reader.py   # §18 timing-authority snapshot subscriber
-data/codar-stations.toml  # CODAR transmitter site database (frequencies, locations)
-tests/                    # 11 files; dechirp / trace / invert / scintillation / contract / TDMA
+data/codar-stations.toml  # CANONICAL CODAR transmitter site database (freq_mhz,
+                          #   sweep params, lat/lon) — the picker generates
+                          #   [[radiod.transmitter]] blocks from this; never hand-transcribe
+tests/                    # dechirp / trace / invert / scintillation / contract / TDMA /
+                          #   stations (ranking + units bridge) / config round-trip
 config/                   # codar-sounder-config.toml.template
 etc/                      # additional config fragments
-scripts/                  # install.sh, deploy.sh, kp_correlation_analysis.py,
-                          # multihop_diagnostic.py (calibration & monitoring tools)
+scripts/                  # install.sh, deploy.sh, config-wizard.sh (whiptail transmitter
+                          #   picker), kp_correlation_analysis.py, multihop_diagnostic.py
 systemd/                  # codar-sounder@.service template unit
 deploy.toml               # sigmond client manifest
 tasks/                    # planning notes
@@ -137,6 +145,31 @@ tasks/                    # planning notes
 
 ## Key design decisions
 
+- **Transmitter selection is a picker, not hand-editing.**
+  `core/stations.py` loads the canonical site DB (`data/codar-stations.toml`)
+  and ranks sites by geodesic distance from the receiver
+  (`audible_transmitters` — the CODAR analogue of superdarn-sounder's
+  `core/radars.py:audible_radars`).  `codar-sounder stations [--json]`
+  surfaces that inventory; the `config init` whiptail wizard
+  (`scripts/config-wizard.sh`) renders it as a multi-select, groups the
+  chosen sites by band into one `[[radiod]]` block each, and writes them
+  via `config apply`.  The picker owns the **MHz→Hz units bridge**
+  (`freq_mhz` → `center_freq_hz`), so generated configs can't carry the
+  hand-transcription errors hand-edited blocks were prone to (e.g. a
+  sweep rate off by 1000×).  Both operator surfaces share this
+  foundation: the whiptail picker, and sigmond's TUI (whose
+  arrays-of-tables editing deliberately delegates to the whiptail wizard,
+  while its Textual scalar wizard preserves the transmitter blocks —
+  correct only because `config apply` now serializes nested
+  `[[radiod.transmitter]]` to valid TOML).
+- **Shared geometry via hamsci-dsp.** TX-RX great-circle distance and
+  bearing come from `hamsci_dsp.geometry` (WGS-84 geodesics via
+  geographiclib), the suite-shared library — not a local haversine.
+  `config.haversine_km` is retained as a thin compatibility wrapper over
+  `hamsci_dsp.geometry.great_circle_km` (name kept; the implementation is
+  now geodesic, ~0.5% off the former spherical math — immaterial to the
+  50/2000 km validate thresholds).  Declared `hamsci-dsp>=0.2.0`, wired
+  editable via `[tool.uv.sources]` (local sibling, not yet on PyPI).
 - **One systemd instance per radiod**
   (`codar-sounder@<radiod_id>.service`), matching the other recorders.
 - **Wideband IQ, not the iq-preset audio filter.** `RadiodIQSource`
