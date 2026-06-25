@@ -127,7 +127,7 @@ sudo systemctl start codar-sounder@<radiod-id>
 ```
 
 The sigmond client contract is documented at
-[`sigmond/docs/CLIENT-CONTRACT.md`](https://github.com/mijahauan/sigmond/blob/main/sigmond/docs/CLIENT-CONTRACT.md)
+[`sigmond/docs/CLIENT-CONTRACT.md`](https://github.com/HamSCI/sigmond/blob/main/sigmond/docs/CLIENT-CONTRACT.md)
 in the orchestrator repo.
 
 ## Further reading

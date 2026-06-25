@@ -9,7 +9,7 @@ license          = "MIT"
 name        = "codar-sounder"
 kind        = "client"
 description = "Opportunistic ionospheric sounder using CODAR chirp transmissions"
-repo        = "https://github.com/mijahauan/codar-sounder"
+repo        = "https://github.com/HamSCI/codar-sounder"
 requires    = ["ka9q-python", "ka9q-radio"]
 contract    = "0.8"
 

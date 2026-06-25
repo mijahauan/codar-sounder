@@ -29,7 +29,7 @@ inversion / scintillation detail; this file is the operational map.
 ## Authors
 
 - Michael Hauan (AC0G, GitHub: mijahauan)
-- Repo: https://github.com/mijahauan/codar-sounder
+- Repo: https://github.com/HamSCI/codar-sounder
 
 ## Quick reference
 
