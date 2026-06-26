@@ -200,12 +200,10 @@ tasks/                    # planning notes
   assignments are discovered via `codar-sounder tdma-scan` and
   written by `tdma_config_writer.py`.
 
-## Client contract (v0.7)
+## Client contract (v0.8)
 
-codar-sounder declares `CONTRACT_VERSION = "0.7"` in
-`src/codar_sounder/contract.py`. The CLI helpstrings still reference
-"v0.5" — that's stale and will mislead `--help` readers; the actual
-implementation is at v0.7. Authoritative spec:
+codar-sounder declares `CONTRACT_VERSION = "0.8"` in
+`src/codar_sounder/contract.py`. Authoritative spec:
 `/opt/git/sigmond/sigmond/docs/CLIENT-CONTRACT.md`.
 
 Sections implemented:

@@ -1,4 +1,4 @@
-"""Sigmond client contract v0.6 — inventory and validate JSON builders.
+"""Sigmond client contract v0.8 — inventory and validate JSON builders.
 
 Contract layout (sigmond/docs/CLIENT-CONTRACT.md):
 
@@ -38,7 +38,7 @@ def _client_version() -> str:
 
 
 def build_inventory(config: dict, config_path: Path) -> dict:
-    """Build the inventory --json payload per contract v0.5 §3.
+    """Build the inventory --json payload per contract v0.8 §3.
 
     One ``instances[]`` entry per configured ``[[radiod.transmitter]]`` —
     a single daemon (one radiod) reports all the CODAR transmitters it
@@ -133,7 +133,7 @@ def build_inventory(config: dict, config_path: Path) -> dict:
     payload["instances"] = instances
     payload["deps"] = {
         "pypi": [
-            {"name": "ka9q-python", "version": ">=3.11.0"},
+            {"name": "ka9q-python", "version": ">=3.14.0"},
             {"name": "numpy", "version": ">=1.24.0"},
         ],
     }
@@ -142,7 +142,7 @@ def build_inventory(config: dict, config_path: Path) -> dict:
 
 
 def build_validate(config: dict, config_path: Path | None = None) -> dict:
-    """Build the validate --json payload per contract v0.5 §12."""
+    """Build the validate --json payload per contract v0.8 §12."""
     issues = _collect_issues(config)
     payload: dict[str, Any] = {
         "ok": not any(i["severity"] == "fail" for i in issues),

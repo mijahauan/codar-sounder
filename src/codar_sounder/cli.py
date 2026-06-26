@@ -1,8 +1,8 @@
 """codar-sounder CLI entry point.
 
 Subcommands:
-    inventory   — contract v0.5 §3 inventory JSON
-    validate    — contract v0.5 §12 config validation
+    inventory   — contract v0.8 §3 inventory JSON
+    validate    — contract v0.8 §12 config validation
     version     — version + git block
     daemon      — long-running sounder (v0.1: stub)
     config init|edit — first-run wizard / edit (contract §14)
@@ -20,7 +20,7 @@ from pathlib import Path
 
 
 def _resolve_log_level() -> int:
-    """Per contract v0.5 §11 precedence."""
+    """Per contract v0.8 §11 precedence."""
     for env_key in ("CODAR_SOUNDER_LOG_LEVEL", "CLIENT_LOG_LEVEL"):
         val = os.environ.get(env_key, "").upper().strip()
         if val and hasattr(logging, val):
